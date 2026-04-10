@@ -5,9 +5,16 @@
 - Bootstrap-generated `AGENTS.md`
 - Shared memory bank in `.memory/`
 - `.memory/delivery-backend.md` for the selected work-tracking model
-- - Outcome and ticket scaffolding
+- Outcome and ticket scaffolding
 - Client-specific agent assets for `cursor-codex`
 - Optional examples included: `true`
+- Workspace scaffold:
+  - `apps/web` (Next.js app shell)
+  - `apps/api` (Hono API shell)
+  - `packages/contracts` (shared platform + env contracts)
+  - `packages/platform` (provider adapter interfaces)
+  - `packages/database` (Prisma schema/client package)
+  - `packages/ui` (shared UI utility package)
 
 ## In Progress
 

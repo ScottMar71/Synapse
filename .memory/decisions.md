@@ -13,3 +13,10 @@
 - Context: The repo needs outcome planning and engineering execution tracking without assuming every installation uses repo-local ticket markdown.
 - Decision: Keep shared workflow intent in repo assets, and route execution tracking through the configured `local-files` backend.
 - Status: Active
+
+### 003 - Establish app/package architecture boundaries
+
+- Date: 2026-04-10
+- Context: LMS v1 requires a portable architecture where runtime-specific code can be swapped without rewriting domain logic.
+- Decision: Create `apps/web` (Next.js) and `apps/api` (Hono) with shared `packages/contracts`, `packages/platform`, `packages/database`, and `packages/ui`; isolate provider concerns behind interfaces in `packages/platform`.
+- Status: Active
