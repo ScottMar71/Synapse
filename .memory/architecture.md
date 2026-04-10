@@ -2,23 +2,24 @@
 
 ## System Overview
 
-This repository was initialized with a bootstrap-generated agent operating model. The agent layer is split into shared memory, workflow templates, and client-specific instruction assets.
+This repository now includes an initial LMS runtime monorepo scaffold alongside the bootstrap-generated agent operating model.
 
 ```mermaid
 flowchart LR
-  guide[AGENTS.md] --> memory[.memory]
-  guide --> outcomes[outcomes]
-  guide --> delivery[TicketFiles]
-  guide --> clientAssets[ClientSpecificAssets]
-  clientAssets --> target[CursorCodexFiles]
+  web[apps/web (Next.js)] --> contracts[packages/contracts]
+  api[apps/api (Hono)] --> contracts
+  api --> platform[packages/platform adapters]
+  api --> database[packages/database (Prisma)]
+  web --> ui[packages/ui]
 ```
 
 ## Bootstrap Topology
 
-1. Shared workflow content lives in `.memory/` and `outcomes/`, with backend-specific delivery guidance in `.memory/delivery-backend.md`.
-2. Delivery execution lives in repo-local `tickets/` files that link back to shared outcomes and memory.
-3. Client-specific instructions are rendered into tool-specific directories.
-4. The installed bootstrap manifest in `.agent-bootstrap.json` tracks generated files and selected backend settings for upgrades and health checks.
+1. `apps/web` is the Next.js surface and consumes shared contracts (and UI where needed).
+2. `apps/api` is the Hono API surface and consumes shared contracts plus platform adapter interfaces.
+3. `packages/platform` defines provider-facing adapter interfaces (auth, storage, email, queue) to keep vendor SDKs out of domain modules.
+4. `packages/database` owns Prisma schema/client setup and centralizes database access.
+5. `packages/contracts` owns shared API and environment contracts used by web and api.
 
 ## Repo Profile
 

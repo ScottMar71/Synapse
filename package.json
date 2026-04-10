@@ -1,0 +1,17 @@
+{
+  "name": "lms",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run --workspaces build",
+    "typecheck": "npm run --workspaces typecheck",
+    "lint": "npm run --workspaces lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
