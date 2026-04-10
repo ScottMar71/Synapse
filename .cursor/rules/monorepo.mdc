@@ -1,0 +1,12 @@
+---
+description: Core monorepo conventions for the workspace
+alwaysApply: true
+---
+
+# Monorepo Conventions
+
+- This repo is a workspace-managed monorepo.
+- Apps live in `apps/`, shared libraries in `packages/`, infrastructure in `infra/`, and templates in `templates/`.
+- Prefer reusing shared packages over duplicating logic across apps.
+- Run repo tasks through root scripts.
+- Read `AGENTS.md` and `.memory/project-map.md` before broad exploration.

@@ -1,0 +1,14 @@
+---
+description: Next.js app conventions
+globs: apps/{portal,docs,partner-portal}/**/*
+alwaysApply: false
+---
+
+# Next.js App Rules
+
+- These apps use Next.js 15 App Router and React 19.
+- Reuse shared UI components and import shared styles where needed.
+- Keep styling aligned to the design system with CSS variables.
+- Prefer the shared page shell pattern: `.page-container`, `.page-header`, `.page-content`.
+- Use shared auth session primitives when auth-aware UI is needed.
+- Keep app-specific logic in the app, and shared logic in `packages/`.

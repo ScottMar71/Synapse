@@ -1,0 +1,12 @@
+---
+description: Read and maintain the repo memory bank to reduce repeated exploration
+alwaysApply: true
+---
+
+# Memory Rules
+
+- Before broad repo exploration, read `.memory/project-map.md`.
+- Read `.memory/architecture.md` and `.memory/current-state.md` when the task touches system design or current implementation status.
+- After structural changes, update the relevant `.memory/` files in the same change.
+- Append important architectural choices to `.memory/decisions.md`.
+- Keep memory concise, factual, and easy for future agents to scan quickly.

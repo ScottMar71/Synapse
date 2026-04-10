@@ -1,0 +1,62 @@
+---
+description: Conductor orchestration rules — MANDATORY for all work. Call session_brief before any work, log_built after progress, end_session when done.
+alwaysApply: true
+---
+
+# Conductor Orchestration Rules (Mandatory)
+
+These rules are enforced by Conductor's gate system. Skipping them will cause tool calls to fail — Conductor rejects state transitions that don't meet prerequisites.
+
+## 1. Brief at start — before any work
+
+Call `conductor_session_brief` with the project name, your agent role, and agent type. The response includes a `sessionId` — **save it and pass it to all subsequent tool calls**.
+
+**Why:** The brief assigns your deliverable, gives acceptance criteria, and provides context from prior sessions. Without it, you'll work on the wrong thing or duplicate work.
+
+## 2. Update deliverable status
+
+Call `conductor_update_deliverable` with status `in_progress` when starting work on the assigned deliverable.
+
+## 3. Log progress — after meaningful chunks
+
+Call `conductor_log_built` with a plain English summary after completing meaningful work (not just at the end). Pass the `sessionId`.
+
+**Why:** The gate for submitting work (`in_progress` → `review`) requires at least one `session_built` entry. If you log nothing, Conductor rejects your review submission.
+
+## 4. Log decisions — don't decide silently
+
+When you face a judgment call (architecture, library, scope), call `conductor_log_decision` with options and reasoning.
+
+**Why:** Silent decisions create confusion across sessions. Logged decisions appear in the human's queue so they can approve, redirect, or delegate.
+
+## 5. End session — when you're done
+
+Call `conductor_end_session` when your work is complete.
+
+**Why:** The gate for review submission requires the session to be ended. Abandoned sessions trigger watchdog alerts.
+
+## 6. Create a PR — before submitting for review
+
+Push the branch and open a pull request targeting `main`. The PR body should summarise what was built and reference the deliverable.
+
+**Why:** A PR is the only artefact the human can review. The completion report gate rejects submissions with no PR URL.
+
+## 7. Submit for review
+
+Call `conductor_update_deliverable` with status `review` and a `completionReport` including the PR URL. Only the human marks deliverables as `done`.
+
+## Consequences of skipping
+
+| Skipped step | What happens |
+|---|---|
+| No session brief | You won't know your assignment |
+| No log_built | Gate rejects in_progress → review |
+| No end_session | Gate rejects review |
+| No PR created | Completion report gate rejects review |
+| No decision log | Human can't track or override your choices |
+
+## Do NOT
+
+- Track work in local `outcomes/` or `tickets/` markdown files — Conductor is the system of record.
+- Skip the session brief — it assigns your deliverable and gives context from prior sessions.
+- Make silent decisions — log them so the human can review.

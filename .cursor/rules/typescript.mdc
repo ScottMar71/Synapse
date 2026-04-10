@@ -1,0 +1,15 @@
+---
+description: TypeScript and TSX coding standards for the monorepo
+globs: **/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript Standards
+
+- Follow strict TypeScript patterns from the shared tsconfig.
+- Use async/await, not `.then()` chains.
+- Avoid `any`; prefer explicit types and Zod validation for runtime input.
+- Order imports as: external packages, workspace packages, app aliases, then relative imports.
+- Use `import type` when importing types.
+- Wrap async operations that can fail in try/catch and log with context.
+- Prefer small public functions with explicit return types.

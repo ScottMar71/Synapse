@@ -1,0 +1,14 @@
+---
+description: Hono API conventions for API apps
+globs: apps/api/**/*
+alwaysApply: false
+---
+
+# Hono API Rules
+
+- Use `OpenAPIHono`, `createRoute`, and Zod-backed schemas for endpoints.
+- Validate env with a helper instead of reading raw env vars in handlers.
+- Success responses should use `{ data: ... }`; failures should use `{ error: ... }`.
+- Protected routes should verify bearer auth.
+- Keep OpenAPI docs available at `/reference`.
+- Use contextual server-side logging and avoid leaking sensitive error details to clients.

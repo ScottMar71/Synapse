@@ -1,0 +1,21 @@
+---
+description: Ask the user which role or skill to use at the start of agent-mode work
+alwaysApply: true
+---
+
+# Agent Role Selection
+
+- At the start of a new agent-mode task, ask the user which role or skill the agent should act as before doing substantial work.
+- If the user already named a role, skill, or workflow step, follow that instruction and do not ask again.
+- Always include an override option so the user can skip role selection and proceed with the default coding agent behavior.
+- Prefer a structured multiple-choice question format over freeform text when the question tool is available.
+- Keep the prompt short and present a concise list focused on the main product-delivery workflow roles.
+- Prefer this default option set unless the task clearly needs a more specialized skill:
+  - `product-manager`
+  - `product-designer`
+  - `tech-lead`
+  - `implementation-engineer`
+  - `delivery-manager`
+- Include a final option such as `default agent / no specific role`.
+- Only expand beyond the default option set when the user request is clearly better served by a specialized skill.
+- After the user chooses, explicitly use the selected skill or role framing for the task.

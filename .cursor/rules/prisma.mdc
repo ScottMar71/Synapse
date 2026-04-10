@@ -1,0 +1,15 @@
+---
+description: Prisma schema conventions for shared database models
+globs: **/*.prisma
+alwaysApply: false
+---
+
+# Prisma Rules
+
+- Schema lives in the database package's prisma directory.
+- Prefer `String @id @default(cuid())` IDs.
+- Add `createdAt` and `updatedAt` to new models.
+- Use `@@map("snake_case_table_name")` on models.
+- Add indexes for foreign keys and common query paths.
+- Use enums for bounded states instead of free-form strings where practical.
+- After schema changes, update the Prisma client and validate the schema workflow.

@@ -1,0 +1,14 @@
+---
+description: MCP server template conventions for new Model Context Protocol services
+globs: templates/mcp-server/**/*
+alwaysApply: false
+---
+
+# MCP Template Rules
+
+- Use `@modelcontextprotocol/sdk` primitives from the template.
+- Validate tool inputs with Zod.
+- Register tools with `server.registerTool()` and resources with `server.registerResource()`.
+- Support stdio by default and SSE when `MCP_TRANSPORT=sse`.
+- Keep the template deployable to container hosting.
+- Favor small, well-described tools and resources over broad catch-all handlers.

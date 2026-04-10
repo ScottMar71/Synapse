@@ -1,0 +1,14 @@
+---
+description: Azure Bicep conventions for infra modules and environments
+globs: infra/**/*
+alwaysApply: false
+---
+
+# Bicep Rules
+
+- Reusable Azure modules belong in `infra/modules/`.
+- Environment entry points belong in `infra/environments/<env>/`.
+- Use `.bicepparam` files for deployable environment parameters.
+- Keep naming and environment structure aligned across dev, test, and prod.
+- Prefer composable modules over large monolithic templates.
+- Treat environment-specific values carefully and avoid committing secrets.

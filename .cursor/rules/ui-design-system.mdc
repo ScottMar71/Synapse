@@ -1,0 +1,14 @@
+---
+description: Design system rules for shared UI work
+globs: packages/ui/**/*
+alwaysApply: false
+---
+
+# UI Design System Rules
+
+- Source tokens live in the shared UI package styles.
+- Use CSS variables for colors, spacing, radii, typography, and shadows.
+- Keep white surfaces, dark text, and a clear primary accent.
+- Avoid dark themes, glass effects, and hardcoded one-off color values.
+- Shared UI components should be reusable across apps and exported cleanly from the UI package.
+- Prefer small, composable components over app-specific widgets inside the shared package.
