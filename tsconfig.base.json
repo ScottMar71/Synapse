@@ -5,6 +5,9 @@
     "moduleResolution": "Bundler",
     "baseUrl": ".",
     "paths": {
+      "@conductor/auth": [
+        "packages/auth/src/index.ts"
+      ],
       "@conductor/contracts": [
         "packages/contracts/src/index.ts"
       ],

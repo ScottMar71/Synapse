@@ -7,15 +7,19 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc --project tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@conductor/auth": "0.1.0",
     "@conductor/contracts": "0.1.0",
+    "@conductor/database": "0.1.0",
     "@conductor/platform": "0.1.0",
     "hono": "^4.9.7"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
-    "tsx": "^4.20.6"
+    "tsx": "^4.20.6",
+    "vitest": "^3.2.4"
   }
 }

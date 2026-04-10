@@ -12,6 +12,7 @@ export default function HomePage(): ReactElement {
     <main>
       <h1>Synapse LMS</h1>
       <p>API base: {runtimeContract.apiBasePath}</p>
+      <p>Protected path: /protected</p>
     </main>
   );
 }

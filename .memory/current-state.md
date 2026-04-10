@@ -11,6 +11,7 @@
 - Workspace scaffold:
   - `apps/web` (Next.js app shell)
   - `apps/api` (Hono API shell)
+  - `packages/auth` (provider-agnostic auth and tenant-scoped RBAC policy package)
   - `packages/contracts` (shared platform + env contracts)
   - `packages/platform` (provider adapter interfaces)
   - `packages/database` (Prisma schema/client package)
@@ -19,10 +20,15 @@
   - Tenant, user, membership/roles, course/module/lesson, enrollment, assessment, submission, progress, and audit event models
   - Initial SQL migration snapshot under `packages/database/prisma/migrations`
   - Local seed workflow via `packages/database/prisma/seed.mjs`
+- Auth and security enforcement slice:
+  - `packages/auth` provides identity + tenant + role authorization helpers
+  - `apps/api` enforces tenant-scoped RBAC guards for protected routes
+  - `apps/api` security tests cover unauthenticated, unauthorized, cross-tenant, and allowed access cases
+  - `apps/web` adds middleware guard wiring for protected routes
 
 ## In Progress
 
-- Fill this section with the repo's active product or engineering work.
+- Next deliverables remain pending (domain APIs, web core journeys, GDPR controls, deploy, and observability).
 
 ## Known Issues
 

@@ -20,3 +20,10 @@
 - Context: LMS v1 requires a portable architecture where runtime-specific code can be swapped without rewriting domain logic.
 - Decision: Create `apps/web` (Next.js) and `apps/api` (Hono) with shared `packages/contracts`, `packages/platform`, `packages/database`, and `packages/ui`; isolate provider concerns behind interfaces in `packages/platform`.
 - Status: Active
+
+### 004 - Centralize auth policy in shared package
+
+- Date: 2026-04-10
+- Context: LMS v1 needs provider-agnostic auth with tenant-scoped RBAC and security tests proving denied access paths.
+- Decision: Add `packages/auth` for identity/session resolution contracts, bearer parsing, and tenant-scoped role checks; keep provider token validation in `packages/platform` auth adapters and tenant membership truth in `packages/database`.
+- Status: Active
