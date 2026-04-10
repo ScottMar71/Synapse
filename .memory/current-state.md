@@ -25,6 +25,11 @@
   - `apps/api` enforces tenant-scoped RBAC guards for protected routes
   - `apps/api` security tests cover unauthenticated, unauthorized, cross-tenant, and allowed access cases
   - `apps/web` adds middleware guard wiring for protected routes
+- GDPR controls and compliance operations slice:
+  - `packages/database` adds consent tracking primitives, DSAR export helper, erasure helper, and retention policy constants
+  - Prisma schema includes `ConsentRecord` + `LegalBasis` and audit actions for consent/erasure
+  - `apps/api` exposes tenant-scoped GDPR endpoints for consent, DSAR export, erasure, and compliance metadata (residency + retention)
+  - `docs/compliance-runbook.md` documents DSAR/erasure procedures, EU residency checks, and incident response baseline
 
 ## In Progress
 

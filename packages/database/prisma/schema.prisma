@@ -38,6 +38,15 @@ enum AuditAction {
   LOGIN
   LOGOUT
   EXPORT
+  CONSENT
+  ERASURE
+}
+
+enum LegalBasis {
+  CONSENT
+  CONTRACT
+  LEGAL_OBLIGATION
+  LEGITIMATE_INTEREST
 }
 
 model Tenant {
@@ -54,6 +63,7 @@ model Tenant {
   enrollments Enrollment[]
   assessments Assessment[]
   auditEvents AuditEvent[]
+  consentRecords ConsentRecord[]
 
   @@map("tenants")
 }
@@ -73,10 +83,31 @@ model User {
   submissions  Submission[]
   progress     Progress[]
   auditEvents  AuditEvent[]
+  consentRecords ConsentRecord[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
   @@map("users")
+}
+
+model ConsentRecord {
+  id            String     @id @default(cuid())
+  tenantId      String
+  userId        String
+  legalBasis    LegalBasis
+  policyVersion String
+  granted       Boolean
+  source        String
+  recordedAt    DateTime   @default(now())
+  archivedAt    DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, recordedAt])
+  @@index([tenantId, legalBasis, recordedAt])
+  @@map("consent_records")
 }
 
 model Membership {

@@ -204,6 +204,17 @@ async function main() {
       },
     },
   });
+
+  await prisma.consentRecord.create({
+    data: {
+      tenantId: tenant.id,
+      userId: adminUser.id,
+      legalBasis: "CONSENT",
+      policyVersion: "v1",
+      granted: true,
+      source: "seed",
+    },
+  });
 }
 
 main()

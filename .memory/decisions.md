@@ -27,3 +27,10 @@
 - Context: LMS v1 needs provider-agnostic auth with tenant-scoped RBAC and security tests proving denied access paths.
 - Decision: Add `packages/auth` for identity/session resolution contracts, bearer parsing, and tenant-scoped role checks; keep provider token validation in `packages/platform` auth adapters and tenant membership truth in `packages/database`.
 - Status: Active
+
+### 005 - Implement GDPR operations as API + database primitives
+
+- Date: 2026-04-10
+- Context: LMS v1 requires DSAR export, right-to-erasure, consent/legal-basis tracking, retention policy visibility, and auditable compliance workflows.
+- Decision: Add GDPR persistence and helpers in `packages/database` (consent records, DSAR export/erasure operations, retention policy constants) and expose tenant-scoped compliance endpoints in `apps/api`; keep operational procedure detail in `docs/compliance-runbook.md`.
+- Status: Active

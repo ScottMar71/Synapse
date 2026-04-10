@@ -3,12 +3,21 @@ import type { Context, Next } from "hono";
 
 import { createTenantAuthorizer, parseBearerToken, type MembershipRole } from "@conductor/auth";
 import type { LmsPlatformContract } from "@conductor/contracts";
-import { getActiveMembershipRoles } from "@conductor/database";
+import {
+  eraseUserPersonalData,
+  exportUserPersonalData,
+  getActiveMembershipRoles,
+  getCurrentConsent,
+  getRetentionPolicies,
+  recordConsent,
+  type LegalBasis
+} from "@conductor/database";
 import { createNoopPlatformAdapters } from "@conductor/platform";
 
 const contract: LmsPlatformContract = {
   apiBasePath: "/api/v1",
-  tenantHeaderName: "x-tenant-id"
+  tenantHeaderName: "x-tenant-id",
+  dataResidencyRegion: process.env.DATA_RESIDENCY_REGION ?? "eu-west-1"
 };
 
 type AppDependencies = {
@@ -16,7 +25,21 @@ type AppDependencies = {
   membershipStore?: {
     getRolesForUser: (input: { tenantId: string; userId: string }) => Promise<MembershipRole[]>;
   };
+  gdprStore?: {
+    recordConsent: typeof recordConsent;
+    getCurrentConsent: typeof getCurrentConsent;
+    exportUserPersonalData: typeof exportUserPersonalData;
+    eraseUserPersonalData: typeof eraseUserPersonalData;
+  };
 };
+
+function requirePathParam(context: Context, key: string): string | Response {
+  const value = context.req.param(key);
+  if (!value) {
+    return context.json({ error: "INVALID_REQUEST" }, 400);
+  }
+  return value;
+}
 
 function createTenantRoleGuard(
   dependencies: Required<AppDependencies>,
@@ -48,6 +71,12 @@ export function buildApp(dependencies: AppDependencies = {}): Hono {
     adapters: dependencies.adapters ?? createNoopPlatformAdapters(),
     membershipStore: dependencies.membershipStore ?? {
       getRolesForUser: getActiveMembershipRoles
+    },
+    gdprStore: dependencies.gdprStore ?? {
+      recordConsent,
+      getCurrentConsent,
+      exportUserPersonalData,
+      eraseUserPersonalData
     }
   };
 
@@ -56,6 +85,22 @@ export function buildApp(dependencies: AppDependencies = {}): Hono {
       data: {
         apiBasePath: contract.apiBasePath,
         adapters: Object.keys(resolvedDependencies.adapters)
+      }
+    });
+  });
+
+  app.get(`${contract.apiBasePath}/compliance/residency`, (context) => {
+    return context.json({
+      data: {
+        region: contract.dataResidencyRegion
+      }
+    });
+  });
+
+  app.get(`${contract.apiBasePath}/compliance/retention`, (context) => {
+    return context.json({
+      data: {
+        policies: getRetentionPolicies()
       }
     });
   });
@@ -75,6 +120,110 @@ export function buildApp(dependencies: AppDependencies = {}): Hono {
       return context.json({ data: { message: "admin ok" } });
     }
   );
+
+  app.get(
+    `${contract.apiBasePath}/tenants/:tenantId/gdpr/consent/:userId`,
+    createTenantRoleGuard(resolvedDependencies, ["ADMIN"]),
+    async (context) => {
+      const tenantId = requirePathParam(context, "tenantId");
+      if (tenantId instanceof Response) {
+        return tenantId;
+      }
+      const userId = requirePathParam(context, "userId");
+      if (userId instanceof Response) {
+        return userId;
+      }
+      const consent = await resolvedDependencies.gdprStore.getCurrentConsent({ tenantId, userId });
+      return context.json({ data: { consent } });
+    }
+  );
+
+  app.post(
+    `${contract.apiBasePath}/tenants/:tenantId/gdpr/consent/:userId`,
+    createTenantRoleGuard(resolvedDependencies, ["ADMIN"]),
+    async (context) => {
+      const tenantId = requirePathParam(context, "tenantId");
+      if (tenantId instanceof Response) {
+        return tenantId;
+      }
+      const userId = requirePathParam(context, "userId");
+      if (userId instanceof Response) {
+        return userId;
+      }
+      const body = await context.req.json();
+
+      if (
+        !body ||
+        typeof body !== "object" ||
+        typeof body.policyVersion !== "string" ||
+        typeof body.granted !== "boolean" ||
+        typeof body.source !== "string" ||
+        !["CONSENT", "CONTRACT", "LEGAL_OBLIGATION", "LEGITIMATE_INTEREST"].includes(body.legalBasis)
+      ) {
+        return context.json({ error: "INVALID_CONSENT_PAYLOAD" }, 400);
+      }
+
+      await resolvedDependencies.gdprStore.recordConsent({
+        tenantId,
+        userId,
+        legalBasis: body.legalBasis as LegalBasis,
+        policyVersion: body.policyVersion,
+        granted: body.granted,
+        source: body.source
+      });
+
+      return context.json({ data: { recorded: true } });
+    }
+  );
+
+  app.get(
+    `${contract.apiBasePath}/tenants/:tenantId/gdpr/users/:userId/export`,
+    createTenantRoleGuard(resolvedDependencies, ["ADMIN"]),
+    async (context) => {
+      const tenantId = requirePathParam(context, "tenantId");
+      if (tenantId instanceof Response) {
+        return tenantId;
+      }
+      const userId = requirePathParam(context, "userId");
+      if (userId instanceof Response) {
+        return userId;
+      }
+      const exportResult = await resolvedDependencies.gdprStore.exportUserPersonalData({
+        tenantId,
+        targetUserId: userId,
+        requestedByUserId: userId
+      });
+
+      return context.json({ data: exportResult });
+    }
+  );
+
+  app.post(
+    `${contract.apiBasePath}/tenants/:tenantId/gdpr/users/:userId/erase`,
+    createTenantRoleGuard(resolvedDependencies, ["ADMIN"]),
+    async (context) => {
+      const tenantId = requirePathParam(context, "tenantId");
+      if (tenantId instanceof Response) {
+        return tenantId;
+      }
+      const userId = requirePathParam(context, "userId");
+      if (userId instanceof Response) {
+        return userId;
+      }
+      const result = await resolvedDependencies.gdprStore.eraseUserPersonalData({
+        tenantId,
+        targetUserId: userId,
+        requestedByUserId: userId
+      });
+
+      if (!result.erased) {
+        return context.json({ error: "USER_NOT_FOUND" }, 404);
+      }
+
+      return context.json({ data: result });
+    }
+  );
+
   return app;
 }
 

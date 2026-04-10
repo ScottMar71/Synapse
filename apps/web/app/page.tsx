@@ -4,7 +4,8 @@ import type { LmsPlatformContract } from "@conductor/contracts";
 
 const runtimeContract: LmsPlatformContract = {
   apiBasePath: "/api/v1",
-  tenantHeaderName: "x-tenant-id"
+  tenantHeaderName: "x-tenant-id",
+  dataResidencyRegion: "eu-west-1"
 };
 
 export default function HomePage(): ReactElement {
