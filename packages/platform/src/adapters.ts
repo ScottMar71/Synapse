@@ -1,5 +1,5 @@
 export type AuthAdapter = {
-  validateToken: (token: string) => Promise<{ userId: string } | null>;
+  validateToken: (token: string) => Promise<{ userId: string; tenantId: string } | null>;
 };
 
 export type StorageAdapter = {
