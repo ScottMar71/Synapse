@@ -9,7 +9,8 @@
   "scripts": {
     "build": "npm run --workspaces build",
     "typecheck": "npm run --workspaces typecheck",
-    "lint": "npm run --workspaces lint"
+    "lint": "npm run --workspaces lint",
+    "test": "npm run --workspaces --if-present test"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

@@ -6,3 +6,261 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum MembershipRole {
+  LEARNER
+  INSTRUCTOR
+  ADMIN
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  GRADED
+}
+
+enum ProgressScope {
+  LESSON
+  MODULE
+  COURSE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+}
+
+model Tenant {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  name        String
+  description String?
+  archivedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  users       User[]
+  courses     Course[]
+  memberships Membership[]
+  enrollments Enrollment[]
+  assessments Assessment[]
+  auditEvents AuditEvent[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  tenantId     String
+  email        String
+  displayName  String
+  externalId   String?
+  archivedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships  Membership[]
+  enrollments  Enrollment[]
+  submissions  Submission[]
+  progress     Progress[]
+  auditEvents  AuditEvent[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Membership {
+  id         String         @id @default(cuid())
+  tenantId   String
+  userId     String
+  role       MembershipRole
+  archivedAt DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, role])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Course {
+  id            String        @id @default(cuid())
+  tenantId      String
+  code          String
+  title         String
+  description   String?
+  publishedAt   DateTime?
+  archivedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  modules       Module[]
+  enrollments   Enrollment[]
+  assessments   Assessment[]
+  progress      Progress[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("courses")
+}
+
+model Module {
+  id          String      @id @default(cuid())
+  tenantId    String
+  courseId    String
+  title       String
+  sortOrder   Int         @default(0)
+  archivedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  course      Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  progress    Progress[]
+
+  @@index([tenantId])
+  @@index([courseId])
+  @@unique([courseId, sortOrder])
+  @@map("modules")
+}
+
+model Lesson {
+  id          String      @id @default(cuid())
+  tenantId    String
+  moduleId    String
+  title       String
+  content     String?
+  sortOrder   Int         @default(0)
+  archivedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  module      Module      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress    Progress[]
+
+  @@index([tenantId])
+  @@index([moduleId])
+  @@unique([moduleId, sortOrder])
+  @@map("lessons")
+}
+
+model Enrollment {
+  id          String           @id @default(cuid())
+  tenantId    String
+  courseId    String
+  userId      String
+  status      EnrollmentStatus @default(ACTIVE)
+  enrolledAt  DateTime         @default(now())
+  completedAt DateTime?
+  archivedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, courseId, userId])
+  @@index([tenantId, userId])
+  @@index([tenantId, courseId])
+  @@map("enrollments")
+}
+
+model Assessment {
+  id          String       @id @default(cuid())
+  tenantId    String
+  courseId    String
+  title       String
+  rubric      String?
+  maxScore    Int
+  archivedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@unique([tenantId, courseId, title])
+  @@index([tenantId])
+  @@index([courseId])
+  @@map("assessments")
+}
+
+model Submission {
+  id            String           @id @default(cuid())
+  tenantId      String
+  assessmentId  String
+  userId        String
+  status        SubmissionStatus @default(DRAFT)
+  score         Int?
+  submittedAt   DateTime?
+  gradedAt      DateTime?
+  archivedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  assessment    Assessment       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, assessmentId, userId])
+  @@index([tenantId, userId])
+  @@index([tenantId, assessmentId])
+  @@map("submissions")
+}
+
+model Progress {
+  id            String        @id @default(cuid())
+  tenantId      String
+  userId        String
+  courseId      String
+  moduleId      String?
+  lessonId      String?
+  scope         ProgressScope
+  percent       Int           @default(0)
+  startedAt     DateTime      @default(now())
+  completedAt   DateTime?
+  archivedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course        Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module        Module?       @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  lesson        Lesson?       @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, userId])
+  @@index([tenantId, courseId])
+  @@index([moduleId])
+  @@index([lessonId])
+  @@unique([tenantId, userId, courseId, moduleId, lessonId, scope])
+  @@map("progress")
+}
+
+model AuditEvent {
+  id           String      @id @default(cuid())
+  tenantId     String
+  userId       String?
+  action       AuditAction
+  entityType   String
+  entityId     String
+  metadata     Json?
+  occurredAt   DateTime    @default(now())
+  archivedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, action, occurredAt])
+  @@index([tenantId, entityType, entityId])
+  @@index([userId])
+  @@map("audit_events")
+}
