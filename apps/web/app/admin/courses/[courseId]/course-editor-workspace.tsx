@@ -20,6 +20,7 @@ export function CourseEditorWorkspace({ initialTitle }: CourseEditorWorkspacePro
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState("");
   const [objectives, setObjectives] = useState("");
+  const [courseSummary, setCourseSummary] = useState("");
 
   return (
     <div className={styles.editorShell}>
@@ -62,7 +63,7 @@ export function CourseEditorWorkspace({ initialTitle }: CourseEditorWorkspacePro
           </div>
         </aside>
       </div>
-      <CourseEditorSummary title={title} description={description} objectives={objectives} />
+      <CourseEditorSummary value={courseSummary} onChange={setCourseSummary} />
     </div>
   );
 }
