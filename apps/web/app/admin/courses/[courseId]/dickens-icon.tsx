@@ -4,7 +4,7 @@ type DickensIconProps = {
   className?: string;
 };
 
-/** Quill-and-ink mark for the Dickens catalog-copy assistant. */
+/** Feather quill mark for the Dickens panel. */
 export function DickensIcon({ className }: DickensIconProps): ReactElement {
   return (
     <svg
@@ -18,33 +18,23 @@ export function DickensIcon({ className }: DickensIconProps): ReactElement {
       focusable="false"
     >
       <path
-        d="M20.5 2.5S18 5 13.5 11 7.5 18.5 5 20.5"
-        stroke="currentColor"
-        strokeWidth="1.45"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        fill="currentColor"
+        d="M19.5 3.25C21 4.75 20.75 8.25 18.25 12.25 15 17.25 9.25 20.75 5.25 21.75L3.85 22.35 5.5 20.35C10.1 18 14.85 14.15 17.2 9.85 18.65 7.35 19.2 5.15 19.5 3.25Z"
       />
       <path
-        d="M17.5 5.5S14.5 9 10 14 6 17.5 4.5 19"
+        d="M17.6 6.4C14.5 10 10.2 14.8 6.1 19.2"
         stroke="currentColor"
-        strokeWidth="1.05"
+        strokeOpacity={0.22}
+        strokeWidth={1.15}
         strokeLinecap="round"
-        opacity={0.55}
       />
       <path
-        d="M12 9.5c2-1.6 4.5-4 8-8"
+        d="M15.4 8.2 13.1 10M13.2 11.4l-2.1 1.9M11 14.2 9 16.1"
         stroke="currentColor"
-        strokeWidth="0.95"
-        strokeLinecap="round"
-        opacity={0.45}
-      />
-      <path
-        d="M4 20.5 2.5 22M5.5 22 3 19.5"
-        stroke="currentColor"
-        strokeWidth="1.45"
+        strokeOpacity={0.32}
+        strokeWidth={0.9}
         strokeLinecap="round"
       />
-      <ellipse cx="6.2" cy="19.8" rx="2.1" ry="1.15" fill="currentColor" opacity={0.22} />
     </svg>
   );
 }
