@@ -71,7 +71,6 @@ export function CourseCopyAssistant({
       </div>
       <p className={styles.aiPanelHint}>
         Dickens generates a course description and learning objectives from the course title, with optional notes.
-        This wireframe uses template-based suggestions; production would call your AI service.
       </p>
       <div className={styles.field}>
         <label className={styles.label} htmlFor={notesId}>
