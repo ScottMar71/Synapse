@@ -113,21 +113,6 @@
   background: var(--color-primary-muted);
 }
 
-.aiPanelCompact {
-  margin-top: var(--space-5);
-  padding: var(--space-4);
-  border-radius: var(--radius-sm);
-}
-
-.aiPanelTitle {
-  margin: 0 0 var(--space-2);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-text-muted);
-}
-
 .aiPanelHint {
   margin: 0 0 var(--space-4);
   font-size: 0.8125rem;
@@ -161,6 +146,10 @@
   border-radius: var(--radius-sm);
   font: inherit;
   background: var(--color-surface-muted);
+}
+
+.selectFullWidth {
+  max-width: none;
 }
 
 .select:focus {

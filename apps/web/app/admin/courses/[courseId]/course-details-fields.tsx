@@ -1,24 +1,31 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { useId, useState } from "react";
+import { useId } from "react";
 
-import { CourseCopyAssistant } from "./course-copy-assistant";
 import styles from "./course-wireframe.module.css";
 
-type CourseDetailsEditorProps = {
-  initialTitle: string;
+export type CourseDetailsFieldsProps = {
+  title: string;
+  description: string;
+  objectives: string;
+  onTitleChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+  onObjectivesChange: (value: string) => void;
 };
 
-export function CourseDetailsEditor({ initialTitle }: CourseDetailsEditorProps): ReactElement {
+export function CourseDetailsFields({
+  title,
+  description,
+  objectives,
+  onTitleChange,
+  onDescriptionChange,
+  onObjectivesChange
+}: CourseDetailsFieldsProps): ReactElement {
   const baseId = useId();
   const titleFieldId = `${baseId}-title`;
   const descriptionId = `${baseId}-description`;
   const objectivesId = `${baseId}-objectives`;
-
-  const [title, setTitle] = useState(initialTitle);
-  const [description, setDescription] = useState("");
-  const [objectives, setObjectives] = useState("");
 
   return (
     <div className={styles.panel}>
@@ -32,7 +39,7 @@ export function CourseDetailsEditor({ initialTitle }: CourseDetailsEditorProps):
           className={styles.input}
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => onTitleChange(e.target.value)}
         />
       </div>
       <div className={styles.field}>
@@ -44,7 +51,7 @@ export function CourseDetailsEditor({ initialTitle }: CourseDetailsEditorProps):
           className={styles.textarea}
           rows={5}
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => onDescriptionChange(e.target.value)}
           placeholder="Short overview learners see before they enroll or open the course."
         />
       </div>
@@ -57,15 +64,10 @@ export function CourseDetailsEditor({ initialTitle }: CourseDetailsEditorProps):
           className={styles.textarea}
           rows={5}
           value={objectives}
-          onChange={(e) => setObjectives(e.target.value)}
+          onChange={(e) => onObjectivesChange(e.target.value)}
           placeholder="One objective per line. Use measurable verbs where possible."
         />
       </div>
-      <CourseCopyAssistant
-        courseTitle={title}
-        onApplyDescription={setDescription}
-        onApplyObjectives={setObjectives}
-      />
     </div>
   );
 }

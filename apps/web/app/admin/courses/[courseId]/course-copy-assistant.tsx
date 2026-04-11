@@ -42,8 +42,8 @@ export function CourseCopyAssistant({
   }
 
   return (
-    <div className={`${styles.aiPanel} ${styles.aiPanelCompact}`}>
-      <h3 className={styles.aiPanelTitle}>Writing assistant</h3>
+    <div className={`${styles.panel} ${styles.aiPanel}`}>
+      <h2 className={styles.panelTitle}>Writing assistant</h2>
       <p className={styles.aiPanelHint}>
         Draft a course description and learning objectives from the title plus optional notes.
         Wireframe output is template-based; production would call your AI service.
@@ -67,7 +67,7 @@ export function CourseCopyAssistant({
         </label>
         <select
           id={toneId}
-          className={styles.select}
+          className={`${styles.select} ${styles.selectFullWidth}`}
           value={tone}
           onChange={(e) => setTone(e.target.value as CourseCopyTone)}
         >
