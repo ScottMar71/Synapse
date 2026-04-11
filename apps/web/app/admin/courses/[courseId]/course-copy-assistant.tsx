@@ -26,9 +26,15 @@ export function CourseCopyAssistant({
   const [authorNotes, setAuthorNotes] = useState("");
   const [tone, setTone] = useState<CourseCopyTone>("professional");
   const [suggestion, setSuggestion] = useState<CourseCopySuggestion | null>(null);
+  const [variant, setVariant] = useState(0);
   const [busy, setBusy] = useState(false);
 
-  async function handleSuggest(): Promise<void> {
+  function handleClearDraft(): void {
+    setSuggestion(null);
+    setVariant(0);
+  }
+
+  async function runSuggest(nextVariant: number): Promise<void> {
     setBusy(true);
     setSuggestion(null);
     await new Promise((r) => setTimeout(r, 320));
@@ -36,10 +42,21 @@ export function CourseCopyAssistant({
       suggestCourseCopy({
         courseTitle,
         authorNotes,
-        tone
+        tone,
+        variant: nextVariant
       })
     );
+    setVariant(nextVariant);
     setBusy(false);
+  }
+
+  async function handleSuggest(): Promise<void> {
+    await runSuggest(0);
+  }
+
+  async function handleAlternativeOption(): Promise<void> {
+    const next = (variant + 1) % 3;
+    await runSuggest(next);
   }
 
   return (
@@ -92,6 +109,19 @@ export function CourseCopyAssistant({
       </button>
       {suggestion ? (
         <div className={styles.suggestionBlock} aria-live="polite">
+          <div className={styles.dickensDraftActions}>
+            <button type="button" className={styles.subtleBtn} onClick={handleClearDraft}>
+              Clear
+            </button>
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              disabled={busy}
+              onClick={() => void handleAlternativeOption()}
+            >
+              {busy ? "Drafting…" : "Alternative option"}
+            </button>
+          </div>
           <div className={styles.suggestionSection}>
             <span className={styles.suggestionLabel}>Suggested description</span>
             <p className={styles.suggestionText}>{suggestion.description}</p>
