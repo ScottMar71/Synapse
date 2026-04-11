@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 
 import type { CourseCopySuggestion, CourseCopyTone } from "./course-copy-wires";
 import { suggestCourseCopy } from "./course-copy-wires";
+import { DickensIcon } from "./dickens-icon";
 import styles from "./course-wireframe.module.css";
 
 type CourseCopyAssistantProps = {
@@ -43,7 +44,12 @@ export function CourseCopyAssistant({
 
   return (
     <div className={`${styles.panel} ${styles.aiPanel}`}>
-      <h2 className={styles.panelTitle}>Dickens</h2>
+      <div className={styles.dickensPanelHead}>
+        <span className={styles.dickensIconWrap}>
+          <DickensIcon />
+        </span>
+        <h2 className={`${styles.panelTitle} ${styles.dickensPanelTitle}`}>Dickens</h2>
+      </div>
       <p className={styles.aiPanelHint}>
         Dickens drafts a course description and learning objectives from the title plus optional notes.
         Wireframe output is template-based; production would call your AI service.

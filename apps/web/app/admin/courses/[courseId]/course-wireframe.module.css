@@ -113,6 +113,24 @@
   background: var(--color-primary-muted);
 }
 
+.dickensPanelHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.dickensIconWrap {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--color-primary);
+  line-height: 0;
+}
+
+.dickensPanelTitle {
+  margin-bottom: 0;
+}
+
 .aiPanelHint {
   margin: 0 0 var(--space-4);
   font-size: 0.8125rem;
