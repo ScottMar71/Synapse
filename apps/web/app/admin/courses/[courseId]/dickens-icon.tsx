@@ -4,7 +4,7 @@ type DickensIconProps = {
   className?: string;
 };
 
-/** Feather quill mark for the Dickens panel. */
+/** Victorian pen and folded paper for the Dickens panel. */
 export function DickensIcon({ className }: DickensIconProps): ReactElement {
   return (
     <svg
@@ -19,20 +19,35 @@ export function DickensIcon({ className }: DickensIconProps): ReactElement {
     >
       <path
         fill="currentColor"
-        d="M19.5 3.25C21 4.75 20.75 8.25 18.25 12.25 15 17.25 9.25 20.75 5.25 21.75L3.85 22.35 5.5 20.35C10.1 18 14.85 14.15 17.2 9.85 18.65 7.35 19.2 5.15 19.5 3.25Z"
+        fillOpacity={0.12}
+        stroke="currentColor"
+        strokeWidth={0.9}
+        strokeLinejoin="round"
+        d="M3.75 10.75h8.25l3.75 3.75v7.25H3.75v-11z"
       />
       <path
-        d="M17.6 6.4C14.5 10 10.2 14.8 6.1 19.2"
+        d="M12 10.75v3.75h3.75"
         stroke="currentColor"
-        strokeOpacity={0.22}
-        strokeWidth={1.15}
+        strokeOpacity={0.34}
+        strokeWidth={0.65}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.25 14.25h7.25M5.25 16.5h7.25M5.25 18.75h5.25"
+        stroke="currentColor"
+        strokeOpacity={0.36}
+        strokeWidth={0.7}
         strokeLinecap="round"
       />
       <path
-        d="M15.4 8.2 13.1 10M13.2 11.4l-2.1 1.9M11 14.2 9 16.1"
+        fill="currentColor"
+        d="M20.65 3.35L22 4.75 11.85 15.35 10.35 14.05 20.65 3.35z"
+      />
+      <path
+        d="M10.5 14.15L12.1 15.65"
         stroke="currentColor"
-        strokeOpacity={0.32}
-        strokeWidth={0.9}
+        strokeOpacity={0.38}
+        strokeWidth={0.6}
         strokeLinecap="round"
       />
     </svg>
