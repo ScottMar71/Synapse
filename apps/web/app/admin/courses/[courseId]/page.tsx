@@ -9,8 +9,16 @@ type AdminCourseWireframePageProps = {
   params: Promise<{ courseId: string }>;
 };
 
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function titleFromCourseId(courseId: string): string {
-  const decoded = decodeURIComponent(courseId);
+  const decoded = safeDecodeURIComponent(courseId);
   if (decoded === "wireframe-demo") {
     return "Onboarding essentials";
   }

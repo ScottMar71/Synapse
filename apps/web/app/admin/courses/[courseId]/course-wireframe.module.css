@@ -168,6 +168,7 @@
 }
 
 .scormZone {
+  position: relative;
   border: 2px dashed var(--color-border-strong);
   border-radius: var(--radius-md);
   padding: var(--space-8);
@@ -183,10 +184,12 @@
 
 .fileInput {
   position: absolute;
+  left: 0;
+  top: 0;
   width: 1px;
   height: 1px;
   padding: 0;
-  margin: -1px;
+  margin: 0;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
