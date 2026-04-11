@@ -53,8 +53,7 @@ export default async function AdminCourseWireframePage({
         </h1>
         <p style={{ margin: 0, color: "var(--color-text-muted)", maxWidth: "52ch" }}>
           Layout for authors and tenant admins: course metadata, SCORM ingestion, document
-          and image uploads, an AI writing assistant for catalog copy, and a duration
-          estimate.
+          and image uploads, Dickens for catalog copy, and a duration estimate.
         </p>
       </header>
 

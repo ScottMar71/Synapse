@@ -43,9 +43,9 @@ export function CourseCopyAssistant({
 
   return (
     <div className={`${styles.panel} ${styles.aiPanel}`}>
-      <h2 className={styles.panelTitle}>Writing assistant</h2>
+      <h2 className={styles.panelTitle}>Dickens</h2>
       <p className={styles.aiPanelHint}>
-        Draft a course description and learning objectives from the title plus optional notes.
+        Dickens drafts a course description and learning objectives from the title plus optional notes.
         Wireframe output is template-based; production would call your AI service.
       </p>
       <div className={styles.field}>
