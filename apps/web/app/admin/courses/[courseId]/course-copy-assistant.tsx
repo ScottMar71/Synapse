@@ -32,6 +32,8 @@ export function CourseCopyAssistant({
   function handleClearDraft(): void {
     setSuggestion(null);
     setVariant(0);
+    setAuthorNotes("");
+    setTone("professional");
   }
 
   async function runSuggest(nextVariant: number): Promise<void> {
