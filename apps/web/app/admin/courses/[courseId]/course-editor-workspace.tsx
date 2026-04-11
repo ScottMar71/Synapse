@@ -23,47 +23,45 @@ export function CourseEditorWorkspace({ initialTitle }: CourseEditorWorkspacePro
   const [courseSummary, setCourseSummary] = useState("");
 
   return (
-    <div className={styles.editorShell}>
-      <div className={styles.grid}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-          <CourseDetailsFields
-            title={title}
-            description={description}
-            objectives={objectives}
-            onTitleChange={setTitle}
-            onDescriptionChange={setDescription}
-            onObjectivesChange={setObjectives}
-          />
-          <ScormUploadBlock />
-        </div>
-
-        <aside style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-          <CourseCopyAssistant
-            courseTitle={title}
-            onApplyDescription={setDescription}
-            onApplyObjectives={setObjectives}
-          />
-          <DocumentUploadBlock />
-          <ImageUploadBlock />
-          <LearningTimeAssistant />
-          <div className={styles.panel}>
-            <h2 className={styles.panelTitle}>Publish</h2>
-            <p
-              style={{
-                margin: "0 0 var(--space-4)",
-                fontSize: "0.875rem",
-                color: "var(--color-text-muted)"
-              }}
-            >
-              Draft / scheduled / live controls would live here.
-            </p>
-            <button type="button" className={styles.secondaryBtn}>
-              Save draft
-            </button>
-          </div>
-        </aside>
+    <div className={styles.grid}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+        <CourseDetailsFields
+          title={title}
+          description={description}
+          objectives={objectives}
+          onTitleChange={setTitle}
+          onDescriptionChange={setDescription}
+          onObjectivesChange={setObjectives}
+        />
+        <ScormUploadBlock />
+        <CourseEditorSummary value={courseSummary} onChange={setCourseSummary} />
       </div>
-      <CourseEditorSummary value={courseSummary} onChange={setCourseSummary} />
+
+      <aside style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+        <CourseCopyAssistant
+          courseTitle={title}
+          onApplyDescription={setDescription}
+          onApplyObjectives={setObjectives}
+        />
+        <DocumentUploadBlock />
+        <ImageUploadBlock />
+        <LearningTimeAssistant />
+        <div className={styles.panel}>
+          <h2 className={styles.panelTitle}>Publish</h2>
+          <p
+            style={{
+              margin: "0 0 var(--space-4)",
+              fontSize: "0.875rem",
+              color: "var(--color-text-muted)"
+            }}
+          >
+            Draft / scheduled / live controls would live here.
+          </p>
+          <button type="button" className={styles.secondaryBtn}>
+            Save draft
+          </button>
+        </div>
+      </aside>
     </div>
   );
 }

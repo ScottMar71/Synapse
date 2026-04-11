@@ -47,12 +47,6 @@
   }
 }
 
-.editorShell {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
 .summaryBox {
   border-style: solid;
   border-color: var(--color-border-strong);
