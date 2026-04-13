@@ -224,6 +224,9 @@ export function CategoriesWireframeDashboard({
         </h1>
         <div className={styles.actionsRow}>
           <button type="button" className={`${styles.btn} ${styles.btnPrimary}`}>
+            Add courses
+          </button>
+          <button type="button" className={`${styles.btn} ${styles.btnSecondary}`}>
             New category
           </button>
           <button type="button" className={`${styles.btn} ${styles.btnSecondary}`}>
@@ -487,7 +490,8 @@ export function CategoriesWireframeDashboard({
         pane summarizes the selected folder, lists immediate subcategories, and shows only courses assigned directly to
         that folder (not rolled up from children). The course table filter applies to that direct list; the top search
         and Filters control are non-functional placeholders; row “…” opens a modal whose actions close the dialog
-        without persisting changes. “New category”, “Reorder”, and “Import mapping” are visual placeholders.
+        without persisting changes. “Add courses”, “New category”, “Reorder”, and “Import mapping” are visual
+        placeholders.
       </p>
     </main>
   );
