@@ -19,7 +19,8 @@
 
 ## Apps / web
 
-- `apps/web/app/admin/categories-wireframe/`: admin wireframe for hierarchical course categories (tree + detail + direct courses table).
+- `apps/web/app/admin/categories-wireframe/`: admin wireframe for course categories (tree + detail + direct courses table).
+- `apps/web/app/admin/wireframe-course-category-presets.ts`: shared preset list for course editor “Course Categories” and the categories dashboard wireframe.
 
 ## Notes
 

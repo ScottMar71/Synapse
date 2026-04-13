@@ -486,9 +486,10 @@ export function CategoriesWireframeDashboard({
       </dialog>
 
       <p className={styles.caption}>
-        Static wireframe: hierarchy on the left reflects departments, skill tracks, and topic subfolders; the detail
-        pane summarizes the selected folder, lists immediate subcategories, and shows only courses assigned directly to
-        that folder (not rolled up from children). The course table filter applies to that direct list; the top search
+        Static wireframe: the tree uses the same preset category ids and labels as the “Course Categories” box on the
+        course editor (Compliance, Onboarding, Product training, Ideas, Leadership, Safety, Sales enablement). There
+        are no subfolders in this demo; the detail pane lists courses assigned to the selected preset only. The course
+        table filter applies to that list; the top search
         and Filters control are non-functional placeholders; row “…” opens a modal whose actions close the dialog
         without persisting changes. “Add courses”, “New category”, “Reorder”, and “Import mapping” are visual
         placeholders.
