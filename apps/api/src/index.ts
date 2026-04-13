@@ -3,7 +3,13 @@ import type { Context, Next } from "hono";
 
 import { createTenantAuthorizer, parseBearerToken, type MembershipRole } from "@conductor/auth";
 import type { LmsPlatformContract } from "@conductor/contracts";
-import { getActiveMembershipRoles } from "@conductor/database";
+import {
+  getActiveMembershipRoles,
+  listCoursesForTenant,
+  listLearnersForTenant,
+  type CourseListItem,
+  type LearnerListItem
+} from "@conductor/database";
 import { createNoopPlatformAdapters } from "@conductor/platform";
 
 const contract: LmsPlatformContract = {
@@ -15,6 +21,10 @@ type AppDependencies = {
   adapters?: ReturnType<typeof createNoopPlatformAdapters>;
   membershipStore?: {
     getRolesForUser: (input: { tenantId: string; userId: string }) => Promise<MembershipRole[]>;
+  };
+  dataAccess?: {
+    listCoursesForTenant: (tenantId: string) => Promise<CourseListItem[]>;
+    listLearnersForTenant: (tenantId: string) => Promise<LearnerListItem[]>;
   };
 };
 
@@ -48,6 +58,10 @@ export function buildApp(dependencies: AppDependencies = {}): Hono {
     adapters: dependencies.adapters ?? createNoopPlatformAdapters(),
     membershipStore: dependencies.membershipStore ?? {
       getRolesForUser: getActiveMembershipRoles
+    },
+    dataAccess: dependencies.dataAccess ?? {
+      listCoursesForTenant,
+      listLearnersForTenant
     }
   };
 
@@ -73,6 +87,26 @@ export function buildApp(dependencies: AppDependencies = {}): Hono {
     createTenantRoleGuard(resolvedDependencies, ["ADMIN"]),
     (context) => {
       return context.json({ data: { message: "admin ok" } });
+    }
+  );
+
+  app.get(
+    `${contract.apiBasePath}/tenants/:tenantId/courses`,
+    createTenantRoleGuard(resolvedDependencies, ["INSTRUCTOR", "ADMIN"]),
+    async (context) => {
+      const tenantId = context.req.param("tenantId");
+      const courses = await resolvedDependencies.dataAccess.listCoursesForTenant(tenantId);
+      return context.json({ data: { courses } });
+    }
+  );
+
+  app.get(
+    `${contract.apiBasePath}/tenants/:tenantId/learners`,
+    createTenantRoleGuard(resolvedDependencies, ["INSTRUCTOR", "ADMIN"]),
+    async (context) => {
+      const tenantId = context.req.param("tenantId");
+      const learners = await resolvedDependencies.dataAccess.listLearnersForTenant(tenantId);
+      return context.json({ data: { learners } });
     }
   );
   return app;

@@ -26,6 +26,10 @@
   - `apps/api` enforces tenant-scoped RBAC guards for protected routes
   - `apps/api` security tests cover unauthenticated, unauthorized, cross-tenant, and allowed access cases
   - `apps/web` adds middleware guard wiring for protected routes
+- Read-only admin domain lists on the API (tenant-scoped, `INSTRUCTOR` or `ADMIN`):
+  - `GET /api/v1/tenants/:tenantId/courses` — non-archived courses
+  - `GET /api/v1/tenants/:tenantId/learners` — users with an active `LEARNER` membership
+  - `packages/database` exposes `listCoursesForTenant` and `listLearnersForTenant`; `buildApp` accepts injectable `dataAccess` for tests
 
 ## In Progress
 
