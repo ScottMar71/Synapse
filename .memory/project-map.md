@@ -17,6 +17,10 @@
 - Workspace style: `monorepo`
 - Stack profile: `conductor-framework`
 
+## Apps / web
+
+- `apps/web/app/admin/categories-wireframe/`: admin wireframe for hierarchical course categories (tree + detail + direct courses table).
+
 ## Notes
 
 - Expand this file with real apps, packages, and infrastructure as the repo grows.
