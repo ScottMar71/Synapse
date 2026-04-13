@@ -115,6 +115,15 @@ export default function LearnersWireframePage(): ReactElement {
             aria-hidden
             onChange={onCsvFileInputChange}
           />
+          <Link href="/admin/assignments-wireframe" className={`${styles.btn} ${styles.btnSecondary}`}>
+            Assignments
+          </Link>
+          <Link href="/admin/reporting-wireframe" className={`${styles.btn} ${styles.btnSecondary}`}>
+            Reporting
+          </Link>
+          <Link href="/admin/courses-wireframe" className={`${styles.btn} ${styles.btnSecondary}`}>
+            Courses
+          </Link>
           <Link href="/admin/learners-wireframe/add" className={`${styles.btn} ${styles.btnPrimary}`}>
             Add learners
           </Link>
@@ -347,6 +356,17 @@ export default function LearnersWireframePage(): ReactElement {
                   )}
                 </li>
               ))}
+              <li>
+                <Link
+                  href={`/admin/assignments-wireframe?learnerId=${encodeURIComponent(rowForActions.id)}`}
+                  className={styles.actionModalAction}
+                  onClick={() => {
+                    closeRowActionsDialog();
+                  }}
+                >
+                  View course assignments
+                </Link>
+              </li>
             </ul>
             <div className={styles.actionModalFooter}>
               <button

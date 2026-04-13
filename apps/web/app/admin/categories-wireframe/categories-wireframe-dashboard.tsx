@@ -2,16 +2,29 @@
 
 import type { ReactElement } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import styles from "./categories-wireframe.module.css";
 import {
   type DemoCategoryNode,
   type DemoCourseRow,
+  collectAllDemoCoursesWithFolders,
   DEMO_CATEGORY_TREE,
-  findDemoCategory,
-  getDemoCategoryBreadcrumb
+  findCategoryInNodes,
+  getCategoryBreadcrumbInNodes,
+  listCoursesEffectiveInFolder
 } from "./demo-category-data";
+import {
+  appendWireframeCustomCategory,
+  dispatchWireframeCustomCategoriesChanged,
+  readWireframeCustomCategories,
+  type WireframeCustomCategoryGrouping,
+  type WireframeCustomCategoryVisibility,
+  type WireframeStoredCustomCategory
+} from "./wireframe-custom-categories-storage";
+import { mergeDemoCategoryTreeWithCustom } from "./wireframe-merge-category-tree";
+import { readWireframeCourseFolderAssignments } from "../wireframe-course-assignments";
 
 type CategoriesWireframeDashboardProps = {
   initialCategoryId: string;
@@ -64,6 +77,27 @@ function countCoursesInSubtree(node: DemoCategoryNode): number {
     total += countCoursesInSubtree(child);
   }
   return total;
+}
+
+function collectAllNodeIds(nodes: readonly DemoCategoryNode[]): Set<string> {
+  const ids = new Set<string>();
+  function walk(list: readonly DemoCategoryNode[]): void {
+    for (const n of list) {
+      ids.add(n.id);
+      walk(n.children);
+    }
+  }
+  walk(nodes);
+  return ids;
+}
+
+function slugFromCategoryName(label: string): string {
+  const base = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return base.length > 0 ? base : "folder";
 }
 
 function CategoryTreeList(props: {
@@ -146,17 +180,55 @@ function courseStatusClass(visibility: DemoCourseRow["visibility"]): string {
 export function CategoriesWireframeDashboard({
   initialCategoryId
 }: CategoriesWireframeDashboardProps): ReactElement {
-  const selected = useMemo(() => findDemoCategory(initialCategoryId), [initialCategoryId]);
+  const router = useRouter();
+  const [customCategories, setCustomCategories] = useState<WireframeStoredCustomCategory[]>([]);
+  const [treeReady, setTreeReady] = useState(false);
+
+  useEffect(() => {
+    setCustomCategories(readWireframeCustomCategories());
+    setTreeReady(true);
+  }, []);
+
+  const mergedTree = useMemo(
+    () => mergeDemoCategoryTreeWithCustom(DEMO_CATEGORY_TREE, customCategories),
+    [customCategories]
+  );
+
+  const selected = useMemo(
+    () => findCategoryInNodes(mergedTree, initialCategoryId),
+    [mergedTree, initialCategoryId]
+  );
+  const allWithFolders = useMemo(() => collectAllDemoCoursesWithFolders(), []);
+  const [folderAssignments, setFolderAssignments] = useState<Record<string, string>>({});
   const [courseQuery, setCourseQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     () => new Set(collectCategoryIds(DEMO_CATEGORY_TREE))
   );
   const [rowForActions, setRowForActions] = useState<DemoCourseRow | null>(null);
   const rowActionsDialogRef = useRef<HTMLDialogElement>(null);
+  const [newCategoryOpen, setNewCategoryOpen] = useState(false);
+  const newCategoryDialogRef = useRef<HTMLDialogElement>(null);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatPlacement, setNewCatPlacement] = useState<"sub" | "root">("sub");
+  const [newCatDescription, setNewCatDescription] = useState("");
+  const [newCatGrouping, setNewCatGrouping] = useState<WireframeCustomCategoryGrouping>("Topic");
+  const [newCatVisibility, setNewCatVisibility] = useState<WireframeCustomCategoryVisibility>("Catalog");
+  const [newCatFormError, setNewCatFormError] = useState<string | null>(null);
 
   useEffect(() => {
     setCourseQuery("");
+    setFolderAssignments(readWireframeCourseFolderAssignments());
   }, [initialCategoryId]);
+
+  useEffect(() => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of collectCategoryIds(mergedTree)) {
+        next.add(id);
+      }
+      return next;
+    });
+  }, [mergedTree]);
 
   useEffect(() => {
     const el = rowActionsDialogRef.current;
@@ -172,8 +244,74 @@ export function CategoriesWireframeDashboard({
     }
   }, [rowForActions]);
 
+  useEffect(() => {
+    const el = newCategoryDialogRef.current;
+    if (!el) {
+      return;
+    }
+    if (newCategoryOpen) {
+      if (!el.open) {
+        el.showModal();
+      }
+    } else if (el.open) {
+      el.close();
+    }
+  }, [newCategoryOpen]);
+
   function closeRowActionsDialog(): void {
     rowActionsDialogRef.current?.close();
+  }
+
+  function closeNewCategoryDialog(): void {
+    newCategoryDialogRef.current?.close();
+  }
+
+  function openNewCategoryDialog(): void {
+    setNewCatName("");
+    setNewCatPlacement("sub");
+    setNewCatDescription("");
+    setNewCatGrouping("Topic");
+    setNewCatVisibility("Catalog");
+    setNewCatFormError(null);
+    setNewCategoryOpen(true);
+  }
+
+  function submitNewCategory(): void {
+    if (!selected) {
+      return;
+    }
+    const name = newCatName.trim();
+    if (name.length === 0) {
+      setNewCatFormError("Enter a folder name.");
+      return;
+    }
+    const slug = slugFromCategoryName(name);
+    const existing = collectAllNodeIds(mergedTree);
+    let id = `cat-custom-${slug}`;
+    let n = 2;
+    while (existing.has(id)) {
+      id = `cat-custom-${slug}-${n}`;
+      n += 1;
+    }
+    const parentId: string | "__root__" = newCatPlacement === "root" ? "__root__" : selected.id;
+    const description =
+      newCatDescription.trim().length > 0
+        ? newCatDescription.trim()
+        : "Custom wireframe folder (saved in this browser only).";
+    const entry: WireframeStoredCustomCategory = {
+      id,
+      parentId,
+      name,
+      slug,
+      description,
+      grouping: newCatGrouping,
+      visibility: newCatVisibility
+    };
+    appendWireframeCustomCategory(entry);
+    setCustomCategories(readWireframeCustomCategories());
+    dispatchWireframeCustomCategoriesChanged();
+    setNewCategoryOpen(false);
+    router.push(`/admin/categories-wireframe/${encodeURIComponent(id)}`);
   }
 
   function onToggleExpand(id: string): void {
@@ -188,29 +326,41 @@ export function CategoriesWireframeDashboard({
     });
   }
 
-  const breadcrumb = selected ? getDemoCategoryBreadcrumb(selected.id) : [];
+  const breadcrumb = selected ? getCategoryBreadcrumbInNodes(mergedTree, selected.id) : [];
   const subtreeCourseCount = selected ? countCoursesInSubtree(selected) : 0;
 
-  const filteredCourses = useMemo(() => {
+  const effectiveDirectCourses = useMemo(() => {
     if (!selected) {
       return [];
     }
+    return listCoursesEffectiveInFolder(selected.id, selected, folderAssignments, allWithFolders);
+  }, [selected, folderAssignments, allWithFolders]);
+
+  const filteredCourses = useMemo(() => {
     const q = courseQuery.trim().toLowerCase();
     if (!q) {
-      return selected.courses;
+      return effectiveDirectCourses;
     }
-    return selected.courses.filter(
+    return effectiveDirectCourses.filter(
       (row) =>
         row.title.toLowerCase().includes(q) ||
         row.skillTags.toLowerCase().includes(q) ||
         row.id.toLowerCase().includes(q)
     );
-  }, [selected, courseQuery]);
+  }, [effectiveDirectCourses, courseQuery]);
+
+  if (!treeReady) {
+    return (
+      <main className={styles.shell}>
+        <p className={styles.caption}>Loading category wireframe…</p>
+      </main>
+    );
+  }
 
   if (!selected) {
     return (
       <main className={styles.shell}>
-        <p className={styles.caption}>Category not found in the demo tree.</p>
+        <p className={styles.caption}>Category not found. Check the URL or create a folder from Course categories.</p>
       </main>
     );
   }
@@ -223,10 +373,19 @@ export function CategoriesWireframeDashboard({
           <span className={styles.wireTag}>Wireframe</span>
         </h1>
         <div className={styles.actionsRow}>
-          <button type="button" className={`${styles.btn} ${styles.btnPrimary}`}>
-            Add courses
-          </button>
-          <button type="button" className={`${styles.btn} ${styles.btnSecondary}`}>
+          <Link href="/admin/courses-wireframe" className={`${styles.btn} ${styles.btnSecondary}`}>
+            All courses
+          </Link>
+          <Link href="/admin/assignments-wireframe" className={`${styles.btn} ${styles.btnSecondary}`}>
+            Assignments
+          </Link>
+          <Link href="/admin/reporting-wireframe" className={`${styles.btn} ${styles.btnSecondary}`}>
+            Reporting
+          </Link>
+          <Link href="/admin/learners-wireframe" className={`${styles.btn} ${styles.btnSecondary}`}>
+            Learners
+          </Link>
+          <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={openNewCategoryDialog}>
             New category
           </button>
           <button type="button" className={`${styles.btn} ${styles.btnSecondary}`}>
@@ -261,7 +420,7 @@ export function CategoriesWireframeDashboard({
         <aside className={styles.treePanel} aria-label="Category hierarchy">
           <h2 className={styles.treeTitle}>Hierarchy</h2>
           <CategoryTreeList
-            nodes={DEMO_CATEGORY_TREE}
+            nodes={mergedTree}
             depth={0}
             selectedId={selected.id}
             expandedIds={expandedIds}
@@ -312,7 +471,7 @@ export function CategoriesWireframeDashboard({
                 <p className={styles.statLabel}>Subfolders</p>
               </div>
               <div className={styles.statCard}>
-                <p className={styles.statValue}>{selected.courses.length}</p>
+                <p className={styles.statValue}>{effectiveDirectCourses.length}</p>
                 <p className={styles.statLabel}>Courses here</p>
               </div>
               <div className={styles.statCard}>
@@ -404,9 +563,9 @@ export function CategoriesWireframeDashboard({
                       </td>
                       <td>
                         <Link
-                          href={`/admin/courses/wireframe-demo`}
+                          href={`/admin/courses/${encodeURIComponent(row.id)}?folder=${encodeURIComponent(selected.id)}`}
                           className={styles.courseTitleLink}
-                          title="Wireframe link — opens demo course editor"
+                          title="Wireframe — opens course editor with this category folder in context"
                         >
                           {row.title}
                         </Link>
@@ -440,6 +599,135 @@ export function CategoriesWireframeDashboard({
           </section>
         </div>
       </div>
+
+      <dialog
+        ref={newCategoryDialogRef}
+        className={`${styles.actionModal} ${styles.actionModalWide}`}
+        aria-labelledby="new-category-title"
+        onClose={() => {
+          setNewCategoryOpen(false);
+        }}
+      >
+        <div className={styles.actionModalInner}>
+          <h2 id="new-category-title" className={styles.actionModalTitle}>
+            New category
+          </h2>
+          <p className={styles.actionModalSubtitle}>
+            Creates a folder in this browser only (<code className={styles.pill}>localStorage</code>).
+          </p>
+          {newCatFormError ? (
+            <p className={styles.modalFormError} role="alert">
+              {newCatFormError}
+            </p>
+          ) : null}
+          <div className={styles.modalForm}>
+            <div className={styles.modalFormField}>
+              <label htmlFor="new-cat-name" className={styles.modalFormLabel}>
+                Name
+              </label>
+              <input
+                id="new-cat-name"
+                className={styles.modalFormInput}
+                value={newCatName}
+                onChange={(e) => {
+                  setNewCatName(e.target.value);
+                }}
+                placeholder="e.g. Partner certification"
+                autoComplete="off"
+              />
+            </div>
+            <fieldset className={styles.modalFormField}>
+              <legend className={styles.modalFormLabel}>Placement</legend>
+              <div className={styles.modalRadioRow}>
+                <label className={styles.modalRadioLabel}>
+                  <input
+                    type="radio"
+                    name="new-cat-placement"
+                    checked={newCatPlacement === "sub"}
+                    onChange={() => {
+                      setNewCatPlacement("sub");
+                    }}
+                  />
+                  <span>Subfolder of “{selected.name}”</span>
+                </label>
+                <label className={styles.modalRadioLabel}>
+                  <input
+                    type="radio"
+                    name="new-cat-placement"
+                    checked={newCatPlacement === "root"}
+                    onChange={() => {
+                      setNewCatPlacement("root");
+                    }}
+                  />
+                  <span>Top-level folder (next to Compliance, Sales, …)</span>
+                </label>
+              </div>
+            </fieldset>
+            <div className={styles.modalFormField}>
+              <label htmlFor="new-cat-grouping" className={styles.modalFormLabel}>
+                Grouping
+              </label>
+              <select
+                id="new-cat-grouping"
+                className={styles.modalFormSelect}
+                value={newCatGrouping}
+                onChange={(e) => {
+                  setNewCatGrouping(e.target.value as WireframeCustomCategoryGrouping);
+                }}
+              >
+                <option value="Topic">Topic</option>
+                <option value="Skill track">Skill track</option>
+                <option value="Department">Department</option>
+              </select>
+            </div>
+            <div className={styles.modalFormField}>
+              <label htmlFor="new-cat-visibility" className={styles.modalFormLabel}>
+                Visibility
+              </label>
+              <select
+                id="new-cat-visibility"
+                className={styles.modalFormSelect}
+                value={newCatVisibility}
+                onChange={(e) => {
+                  setNewCatVisibility(e.target.value as WireframeCustomCategoryVisibility);
+                }}
+              >
+                <option value="Catalog">Catalog</option>
+                <option value="Admin only">Admin only</option>
+                <option value="Hidden">Hidden</option>
+              </select>
+            </div>
+            <div className={styles.modalFormField}>
+              <label htmlFor="new-cat-desc" className={styles.modalFormLabel}>
+                Description (optional)
+              </label>
+              <textarea
+                id="new-cat-desc"
+                className={styles.modalFormTextarea}
+                value={newCatDescription}
+                onChange={(e) => {
+                  setNewCatDescription(e.target.value);
+                }}
+                placeholder="Shown on the category hero"
+              />
+            </div>
+          </div>
+          <div className={styles.actionModalFooter}>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnSecondary}`}
+              onClick={() => {
+                closeNewCategoryDialog();
+              }}
+            >
+              Cancel
+            </button>
+            <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={submitNewCategory}>
+              Create folder
+            </button>
+          </div>
+        </div>
+      </dialog>
 
       <dialog
         ref={rowActionsDialogRef}
@@ -488,11 +776,12 @@ export function CategoriesWireframeDashboard({
       <p className={styles.caption}>
         Static wireframe: top-level tree nodes use the same ids and labels as the “Course Categories” box on the course
         editor; nested folders are example subcategories for admin hierarchy (not shown in the editor checkbox list). The
-        detail pane lists courses assigned directly to the selected folder only. The course
-        table filter applies to that list; the top search
-        and Filters control are non-functional placeholders; row “…” opens a modal whose actions close the dialog
-        without persisting changes. “Add courses”, “New category”, “Reorder”, and “Import mapping” are visual
-        placeholders.
+        “Courses in this category” table lists demo courses in this folder plus any folder overrides from the{" "}
+        <Link href="/admin/courses-wireframe">Courses</Link> wireframe or the course editor (saved in{" "}
+        <code className={styles.pill}>localStorage</code> for this browser). The table filter applies to that list; the top search and Filters control are non-functional
+        placeholders; row “…” opens a modal whose actions close the dialog without persisting changes.{" "}
+        <strong>New category</strong> saves custom folders to <code className={styles.pill}>localStorage</code>. “Reorder”
+        and “Import mapping” are visual placeholders.
       </p>
     </main>
   );
