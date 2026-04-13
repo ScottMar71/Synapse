@@ -18,6 +18,7 @@
   - `packages/ui` (shared UI utility package)
 - Prisma core LMS data model in `packages/database`:
   - Tenant, user, membership/roles, course/module/lesson, enrollment, assessment, submission, progress, and audit event models
+  - Per decision 005, **`User.email`** is the tenant-scoped login identifier; **`User.externalId`** holds the IdP subject when applicable
   - Initial SQL migration snapshot under `packages/database/prisma/migrations`
   - Local seed workflow via `packages/database/prisma/seed.mjs`
 - Auth and security enforcement slice:

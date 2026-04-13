@@ -61,8 +61,10 @@ model Tenant {
 model User {
   id           String       @id @default(cuid())
   tenantId     String
+  /// Tenant-scoped sign-in identifier (unique with tenantId). Normalize/compare as lowercase in app code.
   email        String
   displayName  String
+  /// Identity-provider subject (stable id); not used as the human login handle.
   externalId   String?
   archivedAt   DateTime?
   createdAt    DateTime     @default(now())

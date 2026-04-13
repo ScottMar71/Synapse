@@ -27,3 +27,10 @@
 - Context: LMS v1 needs provider-agnostic auth with tenant-scoped RBAC and security tests proving denied access paths.
 - Decision: Add `packages/auth` for identity/session resolution contracts, bearer parsing, and tenant-scoped role checks; keep provider token validation in `packages/platform` auth adapters and tenant membership truth in `packages/database`.
 - Status: Active
+
+### 005 - Email as the platform login identifier
+
+- Date: 2026-04-13
+- Context: Accounts need a single human-facing sign-in handle that matches common LMS expectations and lines up with `User.email` (`@@unique([tenantId, email])`).
+- Decision: Treat **email** (scoped per tenant) as the login identifier for provisioning, admin UX, and sign-in copy. Keep **`User.id`** as the internal session/API subject after authentication; use **`User.externalId`** only for the identity provider’s stable subject when needed for linking, not as the primary login field.
+- Status: Active
