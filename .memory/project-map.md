@@ -36,10 +36,6 @@
 - `packages/contracts/src/lms-api.ts`: Zod/OpenAPI DTO schemas for LMS HTTP payloads.
 - `packages/database/src/lms-domain.ts`: tenant-scoped LMS domain operations (Prisma only).
 
-## Infra
-
-- `infra/observability/`: SLO targets, error-budget policy sketch, alert routing placeholders, and API/web runbook stubs.
-
 ## Notes
 
 - Expand this file with real apps, packages, and infrastructure as the repo grows.
