@@ -39,6 +39,10 @@ npm run build:clean
 
 CI uses a fresh checkout for each run and does not persist `apps/web/.next`, so this issue is normally **local-only**.
 
+## Web app lint (`@conductor/web`)
+
+`apps/web` uses the ESLint CLI with a committed flat config (`eslint.config.mjs`) and `eslint-config-next` (Core Web Vitals). The `lint` script is `eslint .`, which exits successfully without interactive setup (for example in CI or headless shells). `next lint` is deprecated toward the standalone ESLint CLI; Next’s migration codemod is available as `npx @next/codemod@canary next-lint-to-eslint-cli .` if you need to refresh an older project. This repo already follows that direction.
+
 ## Bootstrap Ownership
 
 - This repo was initialized from the `default` profile.
