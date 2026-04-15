@@ -34,3 +34,10 @@
 - Context: Accounts need a single human-facing sign-in handle that matches common LMS expectations and lines up with `User.email` (`@@unique([tenantId, email])`).
 - Decision: Treat **email** (scoped per tenant) as the login identifier for provisioning, admin UX, and sign-in copy. Keep **`User.id`** as the internal session/API subject after authentication; use **`User.externalId`** only for the identity provider’s stable subject when needed for linking, not as the primary login field.
 - Status: Active
+
+### 006 - Vercel two-project deploy with Supabase EU Postgres
+
+- Date: 2026-04-15
+- Context: Production needs repeatable deploys with EU data residency and a clear split between the Next.js app and the Hono API.
+- Decision: Use **two Vercel projects** (`apps/web` and `apps/api`) with root-level `npm ci` and dedicated `build:vercel-*` scripts; run the API on Vercel via `hono/vercel` (`apps/api/api/[[...route]].ts`). Use **Supabase in an EU region** with **pooled `DATABASE_URL`** and **`DIRECT_URL`** for Prisma migrations. Apply migrations with `prisma migrate deploy` using documented procedures rather than ad hoc SQL.
+- Status: Active
