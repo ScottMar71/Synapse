@@ -9,6 +9,10 @@ import type {
   LearnerProvisionBody,
   ProgressDto,
   ProgressPutBody,
+  ProgressReportRowDto,
+  ProgressReportRowsQuery,
+  ProgressReportSharedQuery,
+  ProgressReportSummaryDto,
   SubmissionDto
 } from "@conductor/contracts";
 
@@ -324,6 +328,63 @@ export async function putCourseCategories(
     return parsed;
   }
   return { ok: true, course: parsed.data.data.course };
+}
+
+function appendProgressReportQueryParams(params: URLSearchParams, query: ProgressReportSharedQuery): void {
+  if (query.courseId) {
+    params.set("courseId", query.courseId);
+  }
+  if (query.learnerId) {
+    params.set("learnerId", query.learnerId);
+  }
+  if (query.enrolledFrom) {
+    params.set("enrolledFrom", query.enrolledFrom);
+  }
+  if (query.enrolledTo) {
+    params.set("enrolledTo", query.enrolledTo);
+  }
+}
+
+export async function fetchProgressReportSummary(
+  session: LmsApiSession,
+  query: ProgressReportSharedQuery
+): Promise<{ ok: true; summary: ProgressReportSummaryDto } | { ok: false; error: ApiError }> {
+  const params = new URLSearchParams();
+  appendProgressReportQueryParams(params, query);
+  const qs = params.toString();
+  const url = `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/reports/progress/summary${qs ? `?${qs}` : ""}`;
+  const response = await fetch(url, { headers: authHeaders(session) });
+  const parsed = await parseResponse<DataEnvelope<{ summary: ProgressReportSummaryDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, summary: parsed.data.data.summary };
+}
+
+export async function fetchProgressReportRows(
+  session: LmsApiSession,
+  query: ProgressReportRowsQuery
+): Promise<
+  { ok: true; rows: ProgressReportRowDto[]; nextCursor: string | null } | { ok: false; error: ApiError }
+> {
+  const params = new URLSearchParams();
+  appendProgressReportQueryParams(params, query);
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  if (query.cursor) {
+    params.set("cursor", query.cursor);
+  }
+  const qs = params.toString();
+  const url = `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/reports/progress/rows${qs ? `?${qs}` : ""}`;
+  const response = await fetch(url, { headers: authHeaders(session) });
+  const parsed = await parseResponse<DataEnvelope<{ rows: ProgressReportRowDto[]; nextCursor: string | null }>>(
+    response
+  );
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, rows: parsed.data.data.rows, nextCursor: parsed.data.data.nextCursor };
 }
 
 export async function deleteCourseFromCategory(

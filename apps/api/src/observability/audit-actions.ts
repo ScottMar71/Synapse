@@ -13,5 +13,6 @@ export const AUDIT_ACTIONS = {
   CATEGORIES_DIRECTORY_READ: "categories.directory_read",
   CATEGORY_WRITE: "category.write",
   COURSE_CATEGORY_LINKS_WRITE: "course.category_links_write",
-  COURSE_UPDATE: "course.update"
+  COURSE_UPDATE: "course.update",
+  REPORTS_PROGRESS_READ: "reports.progress_read"
 } as const;

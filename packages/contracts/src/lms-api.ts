@@ -13,7 +13,8 @@ export const lmsApiTags = {
   categories: "Course categories",
   enrollments: "Enrollments",
   progress: "Progress",
-  assessments: "Assessments"
+  assessments: "Assessments",
+  reports: "Reports"
 } as const;
 
 export const enrollmentStatusSchema = z.enum(["ACTIVE", "COMPLETED", "DROPPED"]);
@@ -159,6 +160,51 @@ export const learnerProvisionBodySchema = z
     displayName: z.string().min(1).max(200).optional()
   })
   .openapi("LearnerProvisionBody");
+
+export const progressReportSummaryDtoSchema = z
+  .object({
+    totalEnrollments: z.number().int(),
+    activeEnrollments: z.number().int(),
+    completedEnrollments: z.number().int(),
+    averageCourseProgressPercent: z.number().nullable(),
+    distinctLearners: z.number().int()
+  })
+  .openapi("ProgressReportSummary");
+
+export const progressReportRowDtoSchema = z
+  .object({
+    enrollmentId: z.string(),
+    userId: z.string(),
+    userEmail: z.string(),
+    userDisplayName: z.string(),
+    courseId: z.string(),
+    courseCode: z.string(),
+    courseTitle: z.string(),
+    enrollmentStatus: enrollmentStatusSchema,
+    enrolledAt: isoDateTime,
+    enrollmentCompletedAt: isoDateTime.nullable(),
+    courseProgressPercent: z.number().int().min(0).max(100),
+    lastProgressAt: isoDateTime.nullable()
+  })
+  .openapi("ProgressReportRow");
+
+/** Shared query shape for staff progress report endpoints (path + query). */
+export const progressReportSharedQuerySchema = z.object({
+  courseId: z.string().min(1).optional(),
+  learnerId: z.string().min(1).optional(),
+  enrolledFrom: isoDateTime.optional(),
+  enrolledTo: isoDateTime.optional()
+});
+
+export const progressReportRowsQuerySchema = progressReportSharedQuerySchema.extend({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  cursor: z.string().min(1).optional()
+});
+
+export type ProgressReportSummaryDto = z.infer<typeof progressReportSummaryDtoSchema>;
+export type ProgressReportRowDto = z.infer<typeof progressReportRowDtoSchema>;
+export type ProgressReportSharedQuery = z.infer<typeof progressReportSharedQuerySchema>;
+export type ProgressReportRowsQuery = z.infer<typeof progressReportRowsQuerySchema>;
 
 export const apiErrorBodySchema = z
   .object({

@@ -15,6 +15,10 @@ import {
   lmsApiTags,
   progressDtoSchema,
   progressPutBodySchema,
+  progressReportRowDtoSchema,
+  progressReportRowsQuerySchema,
+  progressReportSharedQuerySchema,
+  progressReportSummaryDtoSchema,
   submissionDtoSchema,
   z
 } from "@conductor/contracts";
@@ -39,9 +43,13 @@ import {
   updateCourseCategory,
   upsertProgressForUser,
   upsertSubmissionDraft,
+  getProgressReportSummary,
+  listProgressReportRows,
   type CourseDto,
   type CourseListItem,
   type LearnerListItem,
+  type ProgressReportFilters,
+  type ProgressReportListCursor,
   type ServiceError
 } from "@conductor/database";
 import { createNoopPlatformAdapters } from "@conductor/platform";
@@ -53,6 +61,51 @@ import { AUDIT_ACTIONS } from "./observability/audit-actions";
 import { emitAuditEvent } from "./observability/audit";
 import { getMetricsSnapshot } from "./observability/metrics";
 import { createObservabilityMiddleware } from "./observability/middleware";
+
+import { Buffer } from "node:buffer";
+
+function encodeProgressReportCursor(cursor: ProgressReportListCursor): string {
+  return Buffer.from(
+    JSON.stringify({
+      enrolledAt: cursor.enrolledAt.toISOString(),
+      enrollmentId: cursor.enrollmentId
+    }),
+    "utf8"
+  ).toString("base64url");
+}
+
+function decodeProgressReportCursor(raw: string | undefined): ProgressReportListCursor | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      typeof (parsed as { enrolledAt?: unknown }).enrolledAt !== "string" ||
+      typeof (parsed as { enrollmentId?: unknown }).enrollmentId !== "string"
+    ) {
+      return null;
+    }
+    const enrolledAt = new Date((parsed as { enrolledAt: string }).enrolledAt);
+    if (Number.isNaN(enrolledAt.getTime())) {
+      return null;
+    }
+    return { enrolledAt, enrollmentId: (parsed as { enrollmentId: string }).enrollmentId };
+  } catch {
+    return null;
+  }
+}
+
+function progressReportFiltersFromQuery(q: z.infer<typeof progressReportSharedQuerySchema>): ProgressReportFilters {
+  return {
+    courseId: q.courseId,
+    learnerId: q.learnerId,
+    enrolledFrom: q.enrolledFrom ? new Date(q.enrolledFrom) : undefined,
+    enrolledTo: q.enrolledTo ? new Date(q.enrolledTo) : undefined
+  };
+}
 
 const contract: LmsPlatformContract = {
   apiBasePath: "/api/v1",
@@ -81,6 +134,8 @@ type DataAccess = {
   setCourseCategoryLinks: typeof setCourseCategoryLinks;
   removeCourseFromCategory: typeof removeCourseFromCategory;
   updateCourse: typeof updateCourse;
+  getProgressReportSummary: typeof getProgressReportSummary;
+  listProgressReportRows: typeof listProgressReportRows;
 };
 
 type AppDependencies = {
@@ -140,6 +195,8 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     setCourseCategoryLinks,
     removeCourseFromCategory,
     updateCourse,
+    getProgressReportSummary,
+    listProgressReportRows,
     ...dependencies.dataAccess
   };
 
@@ -963,6 +1020,122 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       },
       200
     );
+  });
+
+  const staffReportRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+
+  const progressReportSummaryRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/reports/progress/summary`,
+    tags: [lmsApiTags.reports],
+    request: {
+      params: tenantParams,
+      query: progressReportSharedQuerySchema
+    },
+    responses: {
+      200: {
+        description: "Aggregated progress metrics for staff",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ summary: progressReportSummaryDtoSchema }))
+          }
+        }
+      },
+      400: {
+        description: "Bad request",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      401: {
+        description: "Unauthorized",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      403: {
+        description: "Forbidden",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      }
+    }
+  });
+
+  app.openapi(progressReportSummaryRoute, async (c) => {
+    const { tenantId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const auth = await authorizeRequest(c, tenantId, staffReportRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const filters = progressReportFiltersFromQuery(query);
+    const summary = await resolvedDependencies.dataAccess.getProgressReportSummary(tenantId, filters);
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.REPORTS_PROGRESS_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { variant: "summary", filters }
+    });
+    return c.json({ data: { summary } }, 200);
+  });
+
+  const progressReportRowsRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/reports/progress/rows`,
+    tags: [lmsApiTags.reports],
+    request: {
+      params: tenantParams,
+      query: progressReportRowsQuerySchema
+    },
+    responses: {
+      200: {
+        description: "Paginated enrollment progress rows",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(
+              z.object({
+                rows: z.array(progressReportRowDtoSchema),
+                nextCursor: z.string().nullable()
+              })
+            )
+          }
+        }
+      },
+      400: {
+        description: "Bad request",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      401: {
+        description: "Unauthorized",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      403: {
+        description: "Forbidden",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      }
+    }
+  });
+
+  app.openapi(progressReportRowsRoute, async (c) => {
+    const { tenantId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const auth = await authorizeRequest(c, tenantId, staffReportRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const cursor = query.cursor ? decodeProgressReportCursor(query.cursor) : null;
+    if (query.cursor && !cursor) {
+      return c.json({ error: "Invalid cursor" }, 400) as never;
+    }
+    const filters = progressReportFiltersFromQuery(query);
+    const limit = query.limit ?? 25;
+    const result = await resolvedDependencies.dataAccess.listProgressReportRows(tenantId, filters, {
+      limit,
+      cursor
+    });
+    const nextCursor = result.nextCursor ? encodeProgressReportCursor(result.nextCursor) : null;
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.REPORTS_PROGRESS_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { variant: "rows", resultCount: result.rows.length, filters, limit }
+    });
+    return c.json({ data: { rows: result.rows, nextCursor } }, 200);
   });
 
   const staffCategoryRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];

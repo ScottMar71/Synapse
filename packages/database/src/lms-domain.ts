@@ -1,4 +1,4 @@
-import type { EnrollmentStatus, ProgressScope, SubmissionStatus } from "@prisma/client";
+import type { EnrollmentStatus, Prisma, ProgressScope, SubmissionStatus } from "@prisma/client";
 
 import { prisma } from "./prisma";
 
@@ -1063,4 +1063,221 @@ export async function removeCourseFromCategory(input: {
   });
 
   return { ok: true };
+}
+
+export type ProgressReportFilters = {
+  courseId?: string;
+  learnerId?: string;
+  enrolledFrom?: Date;
+  enrolledTo?: Date;
+};
+
+export type ProgressReportSummary = {
+  totalEnrollments: number;
+  activeEnrollments: number;
+  completedEnrollments: number;
+  averageCourseProgressPercent: number | null;
+  distinctLearners: number;
+};
+
+export type ProgressReportRow = {
+  enrollmentId: string;
+  userId: string;
+  userEmail: string;
+  userDisplayName: string;
+  courseId: string;
+  courseCode: string;
+  courseTitle: string;
+  enrollmentStatus: EnrollmentStatus;
+  enrolledAt: string;
+  enrollmentCompletedAt: string | null;
+  courseProgressPercent: number;
+  lastProgressAt: string | null;
+};
+
+export type ProgressReportListCursor = {
+  enrolledAt: Date;
+  enrollmentId: string;
+};
+
+function buildProgressReportEnrollmentWhere(
+  tenantId: string,
+  filters: ProgressReportFilters
+): Prisma.EnrollmentWhereInput {
+  return {
+    tenantId,
+    archivedAt: null,
+    ...(filters.courseId ? { courseId: filters.courseId } : {}),
+    ...(filters.learnerId ? { userId: filters.learnerId } : {}),
+    ...(filters.enrolledFrom || filters.enrolledTo
+      ? {
+          enrolledAt: {
+            ...(filters.enrolledFrom ? { gte: filters.enrolledFrom } : {}),
+            ...(filters.enrolledTo ? { lte: filters.enrolledTo } : {})
+          }
+        }
+      : {})
+  };
+}
+
+export async function getProgressReportSummary(
+  tenantId: string,
+  filters: ProgressReportFilters
+): Promise<ProgressReportSummary> {
+  const where = buildProgressReportEnrollmentWhere(tenantId, filters);
+
+  const [total, active, completed, distinctUsers] = await Promise.all([
+    prisma.enrollment.count({ where }),
+    prisma.enrollment.count({ where: { ...where, status: "ACTIVE" } }),
+    prisma.enrollment.count({ where: { ...where, status: "COMPLETED" } }),
+    prisma.enrollment.findMany({
+      where,
+      distinct: ["userId"],
+      select: { userId: true }
+    })
+  ]);
+
+  if (total === 0) {
+    return {
+      totalEnrollments: 0,
+      activeEnrollments: 0,
+      completedEnrollments: 0,
+      averageCourseProgressPercent: null,
+      distinctLearners: 0
+    };
+  }
+
+  const enrollments = await prisma.enrollment.findMany({
+    where,
+    select: { userId: true, courseId: true }
+  });
+  const keySet = new Set(enrollments.map((e) => `${e.userId}\t${e.courseId}`));
+  const userIds = [...new Set(enrollments.map((e) => e.userId))];
+
+  const progressRows = await prisma.progress.findMany({
+    where: {
+      tenantId,
+      scope: "COURSE",
+      archivedAt: null,
+      userId: { in: userIds },
+      ...(filters.courseId ? { courseId: filters.courseId } : {})
+    },
+    select: { userId: true, courseId: true, percent: true }
+  });
+
+  const matchingPercents = progressRows
+    .filter((p) => keySet.has(`${p.userId}\t${p.courseId}`))
+    .map((p) => p.percent);
+
+  const averageCourseProgressPercent =
+    matchingPercents.length === 0
+      ? null
+      : Math.round(
+          (matchingPercents.reduce((sum, p) => sum + p, 0) / matchingPercents.length) * 10
+        ) / 10;
+
+  return {
+    totalEnrollments: total,
+    activeEnrollments: active,
+    completedEnrollments: completed,
+    averageCourseProgressPercent,
+    distinctLearners: distinctUsers.length
+  };
+}
+
+export async function listProgressReportRows(
+  tenantId: string,
+  filters: ProgressReportFilters,
+  input: { limit: number; cursor: ProgressReportListCursor | null }
+): Promise<{ rows: ProgressReportRow[]; nextCursor: ProgressReportListCursor | null }> {
+  const limit = Math.min(Math.max(1, input.limit), 100);
+  const baseWhere = buildProgressReportEnrollmentWhere(tenantId, filters);
+
+  const cursorClause: Prisma.EnrollmentWhereInput | undefined = input.cursor
+    ? {
+        OR: [
+          { enrolledAt: { lt: input.cursor.enrolledAt } },
+          {
+            AND: [{ enrolledAt: input.cursor.enrolledAt }, { id: { lt: input.cursor.enrollmentId } }]
+          }
+        ]
+      }
+    : undefined;
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: cursorClause ? { AND: [baseWhere, cursorClause] } : baseWhere,
+    orderBy: [{ enrolledAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    select: {
+      id: true,
+      userId: true,
+      courseId: true,
+      status: true,
+      enrolledAt: true,
+      completedAt: true,
+      user: { select: { email: true, displayName: true } },
+      course: { select: { code: true, title: true } }
+    }
+  });
+
+  const hasMore = enrollments.length > limit;
+  const page = hasMore ? enrollments.slice(0, limit) : enrollments;
+
+  const userIds = [...new Set(page.map((e) => e.userId))];
+  const courseIds = [...new Set(page.map((e) => e.courseId))];
+
+  const progressRows =
+    page.length === 0
+      ? []
+      : await prisma.progress.findMany({
+          where: {
+            tenantId,
+            scope: "COURSE",
+            archivedAt: null,
+            userId: { in: userIds },
+            courseId: { in: courseIds }
+          },
+          select: {
+            userId: true,
+            courseId: true,
+            percent: true,
+            updatedAt: true
+          }
+        });
+
+  const progressByKey = new Map<string, { percent: number; updatedAt: Date }>();
+  for (const p of progressRows) {
+    const key = `${p.userId}\t${p.courseId}`;
+    const existing = progressByKey.get(key);
+    if (!existing || p.updatedAt > existing.updatedAt) {
+      progressByKey.set(key, { percent: p.percent, updatedAt: p.updatedAt });
+    }
+  }
+
+  const rows: ProgressReportRow[] = page.map((e) => {
+    const key = `${e.userId}\t${e.courseId}`;
+    const prog = progressByKey.get(key);
+    return {
+      enrollmentId: e.id,
+      userId: e.userId,
+      userEmail: e.user.email,
+      userDisplayName: e.user.displayName,
+      courseId: e.courseId,
+      courseCode: e.course.code,
+      courseTitle: e.course.title,
+      enrollmentStatus: e.status,
+      enrolledAt: e.enrolledAt.toISOString(),
+      enrollmentCompletedAt: e.completedAt ? e.completedAt.toISOString() : null,
+      courseProgressPercent: prog?.percent ?? 0,
+      lastProgressAt: prog ? prog.updatedAt.toISOString() : null
+    };
+  });
+
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? { enrolledAt: last.enrolledAt, enrollmentId: last.id }
+      : null;
+
+  return { rows, nextCursor };
 }
