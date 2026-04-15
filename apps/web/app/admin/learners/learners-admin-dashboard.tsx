@@ -105,6 +105,9 @@ export function LearnersAdminDashboard(): ReactElement {
           </span>
         </h1>
         <div className={styles.actionsRow}>
+          <Link href="/admin/reports" className={`${styles.btn} ${styles.btnSecondary}`}>
+            Progress reports
+          </Link>
           {canAddLearners ? (
             <Link href="/admin/learners/add" className={`${styles.btn} ${styles.btnPrimary}`}>
               Add learner

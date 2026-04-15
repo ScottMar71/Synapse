@@ -617,6 +617,102 @@ describe("domain list endpoints", () => {
   });
 });
 
+describe("progress report endpoints", () => {
+  it("denies progress report summary for learner role", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async getProgressReportSummary() {
+          throw new Error("getProgressReportSummary should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/reports/progress/summary`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("returns progress report summary for instructor when data access is mocked", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async getProgressReportSummary(tenantId: string) {
+          expect(tenantId).toBe(tenantA);
+          return {
+            totalEnrollments: 3,
+            activeEnrollments: 2,
+            completedEnrollments: 1,
+            averageCourseProgressPercent: 44.5,
+            distinctLearners: 2
+          };
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/reports/progress/summary`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { summary: { totalEnrollments: number; averageCourseProgressPercent: number | null } };
+    };
+    expect(body.data.summary.totalEnrollments).toBe(3);
+    expect(body.data.summary.averageCourseProgressPercent).toBe(44.5);
+  });
+
+  it("returns 400 for invalid progress report cursor", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async listProgressReportRows() {
+          throw new Error("listProgressReportRows should not run with bad cursor");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantA}/reports/progress/rows?cursor=not-a-valid-cursor`,
+      { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(400);
+  });
+});
+
 describe("observability", () => {
   it("echoes x-request-id and exposes internal metrics", async () => {
     const app = buildApp({

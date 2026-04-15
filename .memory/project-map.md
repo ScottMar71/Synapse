@@ -28,7 +28,7 @@
 
 - `apps/web/app/sign-in/`: development sign-in (tenant + user → `dev|<tenant>|<user>` bearer token, routed to learner or instructor).
 - `apps/web/app/learn/`: learner shell (`lms-learner-shell.tsx`), dashboard, catalog, and `courses/[courseId]` learning view (progress + assessment actions).
-- `apps/web/app/instructor/`: instructor shell and overview (learners + courses via API).
+- `apps/web/app/instructor/`: instructor shell and overview (learners + courses via API); staff **Progress reports** at `instructor/reports/` (also linked from `admin/reports/`).
 - `apps/web/lib/lms-session.ts` + `lms-api-client.ts`: browser session cookies + typed fetch to `/api/v1` (proxied via `next.config.mjs` rewrites to `LMS_API_ORIGIN`).
 - `apps/web/app/admin/categories/`: production admin course categories (API-backed tree, CRUD, course links); uses session + `lms-api-client`. Wireframe remains at `apps/web/app/admin/categories-wireframe/`.
 - `apps/web/app/admin/courses/[courseId]/`: admin course editor — loads/saves course metadata (`PATCH /courses/:id`), category links (`PUT .../categories`), publish + archive toggles; client session via `lms-api-client`. Course player (learning page) wireframe preview: `player-wireframe/` (linked from the editor header).
@@ -37,7 +37,7 @@
 
 ## Apps / api
 
-- `apps/api`: Hono `OpenAPIHono` app (`src/build-app.ts`) with LMS routes under `/api/v1/tenants/:tenantId` (catalog, enrollments, progress, assessment submissions), OpenAPI at `/doc`, Swagger UI at `/reference`.
+- `apps/api`: Hono `OpenAPIHono` app (`src/build-app.ts`) with LMS routes under `/api/v1/tenants/:tenantId` (catalog, enrollments, progress, assessment submissions, staff **reports** `GET .../reports/progress/summary` and `GET .../reports/progress/rows`), OpenAPI at `/doc`, Swagger UI at `/reference`.
 - `apps/api/src/observability/`: structured JSON request logging, `x-request-id` correlation (AsyncLocalStorage), stdout audit lines for sensitive routes, in-process metrics at `GET /internal/metrics`; `GET /health` for probes.
 - `apps/api/src/serve.ts`: local dev HTTP server (`npm run dev` in `apps/api`) on port `8787` by default; uses `dev|<tenant>|<user>` bearer token parsing for `validateToken` so the web app can authenticate without a real IdP.
 - `packages/contracts/src/lms-api.ts`: Zod/OpenAPI DTO schemas for LMS HTTP payloads.
