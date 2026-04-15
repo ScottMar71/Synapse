@@ -1,6 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "./prisma";
 
-export const prisma = new PrismaClient();
+export { prisma } from "./prisma";
 
 export type CourseListItem = {
   id: string;
@@ -73,3 +73,5 @@ export async function listLearnersForTenant(tenantId: string): Promise<LearnerLi
     }
   });
 }
+
+export * from "./lms-domain";
