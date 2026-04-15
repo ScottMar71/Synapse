@@ -30,9 +30,9 @@
 - `apps/web/app/learn/`: learner shell (`lms-learner-shell.tsx`), dashboard, catalog, and `courses/[courseId]` learning view (progress + assessment actions).
 - `apps/web/app/instructor/`: instructor shell and overview (learners + courses via API); staff **Progress reports** at `instructor/reports/` (also linked from `admin/reports/`).
 - `apps/web/lib/lms-session.ts` + `lms-api-client.ts`: browser session cookies + typed fetch to `/api/v1` (proxied via `next.config.mjs` rewrites to `LMS_API_ORIGIN`).
-- `apps/web/app/admin/categories/`: production admin course categories (API-backed tree, CRUD, course links); uses session + `lms-api-client`. Wireframe remains at `apps/web/app/admin/categories-wireframe/`.
-- `apps/web/app/admin/courses/[courseId]/`: admin course editor — loads/saves course metadata (`PATCH /courses/:id`), category links (`PUT .../categories`), publish + archive toggles; client session via `lms-api-client`. Course player (learning page) wireframe preview: `player-wireframe/` (linked from the editor header).
-- `apps/web/app/admin/learners/`: production learners directory (`GET .../learners`) and add flow (`POST .../learners`, admin-only); wireframe remains at `learners-wireframe/`.
+- `apps/web/app/admin/categories/`: tenant-scoped course categories (API-backed tree, CRUD, course links); shared loading/error UX in `admin-page-states.tsx`. Legacy `categories-wireframe/*` redirects to these routes.
+- `apps/web/app/admin/courses/[courseId]/`: course editor — metadata (`PATCH /courses/:id`), category links (`PUT .../categories`), publish + archive; staff-only gate via `probeInstructorRoute` before load. Layout preview: `player-wireframe/`.
+- `apps/web/app/admin/learners/`: learners directory (`GET .../learners`) and add flow (`POST .../learners`, admin-only). Legacy `learners-wireframe/*` redirects to these routes.
 - `apps/web/app/admin/wireframe-course-category-presets.ts`: shared preset list for course editor “Course Categories” and the categories dashboard wireframe.
 
 ## Apps / api

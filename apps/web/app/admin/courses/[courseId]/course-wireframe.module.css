@@ -21,7 +21,8 @@
   font-weight: 400;
 }
 
-.wireTag {
+.wireTag,
+.staffTag {
   display: inline-block;
   margin-left: var(--space-3);
   padding: var(--space-1) var(--space-2);

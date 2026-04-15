@@ -8,10 +8,8 @@ const runtimeContract: LmsPlatformContract = {
   tenantHeaderName: "x-tenant-id"
 };
 
-/** Demo IDs for wireframes and local deep-linking; replace learner/course slugs with tenant data when exercising API-backed views. */
+/** Demo course id for local deep-linking; use a real course id from your tenant when testing saves. */
 const SAMPLE_ADMIN_COURSE_ID = "wireframe-demo";
-const SAMPLE_LEARNER_WIREFRAME_ID = "1";
-const SAMPLE_CATEGORY_WIREFRAME_ID = "cat-sales";
 
 function publicBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -120,7 +118,8 @@ export default function HomePage(): ReactElement {
         <section style={{ ...sectionCard, marginTop: "var(--space-4)" }}>
           <h2 style={{ margin: "0 0 var(--space-3)", fontSize: "1rem" }}>Admin (API-backed)</h2>
           <p style={{ ...muted, margin: "0 0 var(--space-4)" }}>
-            Requires admin or instructor session. Category detail URLs use ids returned from the API.
+            Tenant-scoped staff UI (instructor or admin). The API enforces RBAC on every request. Sign-in sets cookies
+            required for these routes. Legacy <code>/admin/*-wireframe</code> URLs redirect here.
           </p>
           <div style={linkStack}>
             <HubLink href="/admin/categories">Course categories →</HubLink>
@@ -130,27 +129,9 @@ export default function HomePage(): ReactElement {
               Course editor (sample id: {SAMPLE_ADMIN_COURSE_ID}) →
             </HubLink>
             <HubLink href={`/admin/courses/${SAMPLE_ADMIN_COURSE_ID}/player-wireframe`}>
-              Course player wireframe (preview) →
+              Course player layout preview (demo content) →
             </HubLink>
             <HubLink href="/admin/reports">Progress reports (admin) →</HubLink>
-          </div>
-        </section>
-
-        <section style={{ ...sectionCard, marginTop: "var(--space-4)" }}>
-          <h2 style={{ margin: "0 0 var(--space-3)", fontSize: "1rem" }}>Admin wireframes</h2>
-          <p style={{ ...muted, margin: "0 0 var(--space-4)" }}>
-            Static UX prototypes with demo data; safe to click without API setup.
-          </p>
-          <div style={linkStack}>
-            <HubLink href="/admin/categories-wireframe">Categories dashboard wireframe →</HubLink>
-            <HubLink href={`/admin/categories-wireframe/${SAMPLE_CATEGORY_WIREFRAME_ID}`}>
-              Category detail wireframe ({SAMPLE_CATEGORY_WIREFRAME_ID}) →
-            </HubLink>
-            <HubLink href="/admin/learners-wireframe">Learners list wireframe →</HubLink>
-            <HubLink href="/admin/learners-wireframe/add">Add learner wireframe →</HubLink>
-            <HubLink href={`/admin/learners-wireframe/${SAMPLE_LEARNER_WIREFRAME_ID}`}>
-              Learner profile wireframe ({SAMPLE_LEARNER_WIREFRAME_ID}) →
-            </HubLink>
           </div>
         </section>
 

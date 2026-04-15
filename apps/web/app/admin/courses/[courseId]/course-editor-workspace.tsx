@@ -2,17 +2,20 @@
 
 import type { CourseCategoryDto } from "@conductor/contracts";
 import type { ReactElement } from "react";
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import {
   fetchCourse,
   fetchCourseCategories,
+  formatTenantAdminError,
   patchCourse,
+  probeInstructorRoute,
   putCourseCategories,
+  type ApiError,
   type LmsApiSession
 } from "../../../../lib/lms-api-client";
 import { getSession } from "../../../../lib/lms-session";
+import { AdminLoadError, AdminLoading, AdminSignInRequired, AdminStaffForbidden } from "../../admin-page-states";
 import { CourseCopyAssistant } from "./course-copy-assistant";
 import { CourseDetailsFields } from "./course-details-fields";
 import { DocumentUploadBlock } from "./document-upload-block";
@@ -31,7 +34,8 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
   const [categories, setCategories] = useState<CourseCategoryDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<ApiError | null>(null);
+  const [staffForbidden, setStaffForbidden] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -48,20 +52,28 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
     const s = getSession();
     if (!s) {
       setSession(null);
+      setStaffForbidden(false);
       setLoading(false);
       return;
     }
     setSession(s);
     setLoading(true);
     setLoadError(null);
+    setStaffForbidden(false);
+    const staff = await probeInstructorRoute(s);
+    if (!staff) {
+      setStaffForbidden(true);
+      setLoading(false);
+      return;
+    }
     const [courseRes, catRes] = await Promise.all([fetchCourse(s, courseId), fetchCourseCategories(s)]);
     if (!courseRes.ok) {
-      setLoadError(courseRes.error.message);
+      setLoadError(courseRes.error);
       setLoading(false);
       return;
     }
     if (!catRes.ok) {
-      setLoadError(catRes.error.message);
+      setLoadError(catRes.error);
       setLoading(false);
       return;
     }
@@ -102,7 +114,7 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
       archived
     });
     if (!patchRes.ok) {
-      setSaveError(patchRes.error.message);
+      setSaveError(formatTenantAdminError(patchRes.error));
       setSaving(false);
       return;
     }
@@ -112,7 +124,7 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
       categoryIds: [...selectedCategoryIds]
     });
     if (!catRes.ok) {
-      setSaveError(catRes.error.message);
+      setSaveError(formatTenantAdminError(catRes.error));
       setSaving(false);
       return;
     }
@@ -137,31 +149,19 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
   }
 
   if (!session && !loading) {
-    return (
-      <p>
-        Sign in from the{" "}
-        <Link href="/sign-in">sign-in page</Link> (learner or instructor) to edit courses.
-      </p>
-    );
+    return <AdminSignInRequired context="edit course metadata" />;
   }
 
   if (loading) {
-    return (
-      <p aria-busy="true">
-        Loading course…
-      </p>
-    );
+    return <AdminLoading label="Loading course…" />;
+  }
+
+  if (staffForbidden) {
+    return <AdminStaffForbidden />;
   }
 
   if (loadError) {
-    return (
-      <div>
-        <p role="alert">{loadError}</p>
-        <button type="button" className={styles.secondaryBtn} onClick={() => void load()}>
-          Retry
-        </button>
-      </div>
-    );
+    return <AdminLoadError error={loadError} onRetry={() => void load()} />;
   }
 
   const sortedCategories = [...categories].sort((a, b) => a.name.localeCompare(b.name));

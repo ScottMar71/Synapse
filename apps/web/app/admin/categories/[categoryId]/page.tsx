@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Suspense } from "react";
 
 import { CategoriesAdminDashboard } from "../categories-admin-dashboard";
 
@@ -8,5 +9,15 @@ type PageProps = {
 
 export default async function AdminCategoryDetailPage(props: PageProps): Promise<ReactElement> {
   const { categoryId } = await props.params;
-  return <CategoriesAdminDashboard initialCategoryId={categoryId} />;
+  return (
+    <Suspense
+      fallback={
+        <main className="page-container">
+          <p aria-busy="true">Loading…</p>
+        </main>
+      }
+    >
+      <CategoriesAdminDashboard initialCategoryId={categoryId} />
+    </Suspense>
+  );
 }

@@ -1,8 +1,6 @@
-import type { ReactElement } from "react";
+import { redirect } from "next/navigation";
 
-import { CategoriesWireframeDashboard } from "./categories-wireframe-dashboard";
-import { DEFAULT_CATEGORY_WIREFRAME_ID } from "./demo-category-data";
-
-export default function CategoriesWireframePage(): ReactElement {
-  return <CategoriesWireframeDashboard initialCategoryId={DEFAULT_CATEGORY_WIREFRAME_ID} />;
+/** @deprecated Old wireframe URL — use `/admin/categories`. */
+export default function LegacyCategoriesWireframeIndexPage(): void {
+  redirect("/admin/categories");
 }

@@ -5,9 +5,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { fetchLearners, probeAdminRoute, type LearnerSummary, type LmsApiSession } from "../../../lib/lms-api-client";
+import {
+  fetchLearners,
+  probeAdminRoute,
+  type ApiError,
+  type LearnerSummary,
+  type LmsApiSession
+} from "../../../lib/lms-api-client";
 import { getSession } from "../../../lib/lms-session";
-import styles from "../learners-wireframe/learners-wireframe.module.css";
+import { AdminLoadError, AdminLoading, AdminSignInRequired } from "../admin-page-states";
+import styles from "../admin-learners-shell.module.css";
 
 function formatAddedAt(iso: string): string {
   try {
@@ -24,7 +31,7 @@ export function LearnersAdminDashboard(): ReactElement {
   const [session, setSession] = useState<LmsApiSession | null>(null);
   const [learners, setLearners] = useState<LearnerSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<ApiError | null>(null);
   const [query, setQuery] = useState("");
   const [canAddLearners, setCanAddLearners] = useState(false);
 
@@ -37,11 +44,11 @@ export function LearnersAdminDashboard(): ReactElement {
     }
     setSession(s);
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     const [listRes, adminOk] = await Promise.all([fetchLearners(s), probeAdminRoute(s)]);
     setCanAddLearners(adminOk);
     if (!listRes.ok) {
-      setError(listRes.error.message);
+      setLoadError(listRes.error);
       setLoading(false);
       return;
     }
@@ -66,33 +73,15 @@ export function LearnersAdminDashboard(): ReactElement {
   }, [learners, query]);
 
   if (!session && !loading) {
-    return (
-      <main className={styles.shell}>
-        <p>
-          Sign in from the{" "}
-          <Link href="/sign-in">sign-in page</Link> as an instructor or admin to view learners.
-        </p>
-      </main>
-    );
+    return <AdminSignInRequired context="view the learners directory" />;
   }
 
   if (loading) {
-    return (
-      <main className={styles.shell} aria-busy="true">
-        <p>Loading learners…</p>
-      </main>
-    );
+    return <AdminLoading label="Loading learners…" />;
   }
 
-  if (error) {
-    return (
-      <main className={styles.shell}>
-        <p role="alert">{error}</p>
-        <button type="button" className={`${styles.btn} ${styles.btnSecondary}`} onClick={() => void load()}>
-          Retry
-        </button>
-      </main>
-    );
+  if (loadError) {
+    return <AdminLoadError error={loadError} onRetry={() => void load()} />;
   }
 
   return (
@@ -100,8 +89,8 @@ export function LearnersAdminDashboard(): ReactElement {
       <div className={styles.topBar}>
         <h1 className={styles.titleRow}>
           Learners{" "}
-          <span className={styles.wireTag} style={{ opacity: 0.85 }}>
-            Admin
+          <span className={styles.staffTag} style={{ opacity: 0.85 }}>
+            Staff
           </span>
         </h1>
         <div className={styles.actionsRow}>
