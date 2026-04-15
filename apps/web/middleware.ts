@@ -26,7 +26,7 @@ function redirectWithRequestId(request: NextRequest, url: URL): NextResponse {
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith("/learn") || pathname.startsWith("/instructor")) {
+  if (pathname.startsWith("/learn") || pathname.startsWith("/instructor") || pathname.startsWith("/admin")) {
     const token = request.cookies.get("lms_token")?.value;
     const tenant = request.cookies.get("lms_tenant")?.value;
     if (!token || !tenant) {

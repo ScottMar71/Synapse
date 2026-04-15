@@ -1,20 +1,11 @@
-import type { ReactElement } from "react";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 
-import { CategoriesWireframeDashboard } from "../categories-wireframe-dashboard";
-import { findDemoCategory } from "../demo-category-data";
-
-type CategoryWireframePageProps = {
+type PageProps = {
   params: Promise<{ categoryId: string }>;
 };
 
-export default async function CategoryWireframePage({
-  params
-}: CategoryWireframePageProps): Promise<ReactElement> {
-  const { categoryId } = await params;
-  if (!findDemoCategory(categoryId)) {
-    notFound();
-  }
-
-  return <CategoriesWireframeDashboard initialCategoryId={categoryId} />;
+/** @deprecated Old wireframe URL — use `/admin/categories/:categoryId`. */
+export default async function LegacyCategoriesWireframeDetailPage(props: PageProps): Promise<void> {
+  const { categoryId } = await props.params;
+  redirect(`/admin/categories/${encodeURIComponent(categoryId)}`);
 }

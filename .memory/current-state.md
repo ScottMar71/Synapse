@@ -26,6 +26,7 @@
   - `apps/api` enforces tenant-scoped RBAC guards for protected routes
   - `apps/api` security tests cover unauthenticated, unauthorized, cross-tenant, and allowed access cases
   - `apps/web` adds middleware guard wiring for protected routes
+- Admin staff UI on the web (`/admin/*`): middleware requires `lms_token` + `lms_tenant` cookies (same as `/learn` and `/instructor`). Categories, learners, and course editor use shared `admin-page-states` for sign-in, loading, retry, and staff-forbidden messaging; `formatTenantAdminError` maps HTTP statuses to operator-facing copy. Course editor calls `probeInstructorRoute` before loading course data so learners with catalog access do not see an editable staff form. Legacy `*-wireframe` admin URLs redirect to production routes.
 - Read-only admin domain lists on the API (tenant-scoped, `INSTRUCTOR` or `ADMIN`):
   - `GET /api/v1/tenants/:tenantId/courses` — non-archived courses
   - `GET /api/v1/tenants/:tenantId/learners` — users with an active `LEARNER` membership

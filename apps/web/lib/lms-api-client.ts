@@ -22,6 +22,19 @@ export type LmsApiSession = Pick<LmsSession, "token" | "tenantId">;
 
 export type ApiError = { status: number; message: string };
 
+export function formatTenantAdminError(error: ApiError): string {
+  if (error.status === 401) {
+    return "Your session is not valid or has expired. Sign in again.";
+  }
+  if (error.status === 403) {
+    return "You do not have access to this tenant admin area. Sign in as an instructor or admin.";
+  }
+  if (error.status === 404) {
+    return "The requested item was not found for this tenant.";
+  }
+  return error.message;
+}
+
 type DataEnvelope<T> = { data: T };
 
 async function parseResponse<T>(response: Response): Promise<{ ok: true; data: T } | { ok: false; error: ApiError }> {

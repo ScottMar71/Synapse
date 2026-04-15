@@ -12,13 +12,16 @@ import {
   fetchCourseCategories,
   fetchCourses,
   fetchCoursesInCategory,
+  formatTenantAdminError,
   patchCourseCategory,
   postCourseCategory,
   putCourseCategories,
+  type ApiError,
   type LmsApiSession
 } from "../../../lib/lms-api-client";
 import { getSession } from "../../../lib/lms-session";
-import styles from "../categories-wireframe/categories-wireframe.module.css";
+import { AdminLoadError, AdminLoading, AdminSignInRequired } from "../admin-page-states";
+import styles from "../admin-categories-shell.module.css";
 
 type CategoryNode = CourseCategoryDto & { children: CategoryNode[] };
 
@@ -114,9 +117,10 @@ export function CategoriesAdminDashboard({
   const [session, setSession] = useState<LmsApiSession | null>(null);
   const [categories, setCategories] = useState<CourseCategoryDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [fatalError, setFatalError] = useState<ApiError | null>(null);
   const [coursesInCategory, setCoursesInCategory] = useState<CourseDto[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
+  const [coursesInCategoryError, setCoursesInCategoryError] = useState<string | null>(null);
   const [allCourses, setAllCourses] = useState<CourseDto[]>([]);
   const [newName, setNewName] = useState("");
   const [renameValue, setRenameValue] = useState("");
@@ -133,10 +137,10 @@ export function CategoriesAdminDashboard({
 
   const loadCategories = useCallback(async (api: LmsApiSession): Promise<void> => {
     setLoading(true);
-    setError(null);
+    setFatalError(null);
     const res = await fetchCourseCategories(api);
     if (!res.ok) {
-      setError(res.error.message);
+      setFatalError(res.error);
       setLoading(false);
       return;
     }
@@ -182,14 +186,17 @@ export function CategoriesAdminDashboard({
     }
     let cancelled = false;
     setCoursesLoading(true);
+    setCoursesInCategoryError(null);
     void fetchCoursesInCategory(session, initialCategoryId).then((res) => {
       if (cancelled) {
         return;
       }
       if (res.ok) {
         setCoursesInCategory(res.courses);
+        setCoursesInCategoryError(null);
       } else {
         setCoursesInCategory([]);
+        setCoursesInCategoryError(formatTenantAdminError(res.error));
       }
       setCoursesLoading(false);
     });
@@ -235,7 +242,7 @@ export function CategoriesAdminDashboard({
     }
     const res = await postCourseCategory(session, { name: newName.trim() });
     if (!res.ok) {
-      setError(res.error.message);
+      setFatalError(res.error);
       return;
     }
     setNewName("");
@@ -252,7 +259,7 @@ export function CategoriesAdminDashboard({
       parentId: selected.id
     });
     if (!res.ok) {
-      setError(res.error.message);
+      setFatalError(res.error);
       return;
     }
     setNewName("");
@@ -266,7 +273,7 @@ export function CategoriesAdminDashboard({
     }
     const res = await patchCourseCategory(session, selected.id, { name: renameValue.trim() });
     if (!res.ok) {
-      setError(res.error.message);
+      setFatalError(res.error);
       return;
     }
     await loadCategories(session);
@@ -281,7 +288,7 @@ export function CategoriesAdminDashboard({
     }
     const res = await deleteCourseCategory(session, selected.id);
     if (!res.ok) {
-      setError(res.error.message);
+      setFatalError(res.error);
       return;
     }
     await loadCategories(session);
@@ -294,7 +301,7 @@ export function CategoriesAdminDashboard({
     }
     const res = await deleteCourseFromCategory(session, courseId, selected.id);
     if (!res.ok) {
-      setError(res.error.message);
+      setFatalError(res.error);
       return;
     }
     const refresh = await fetchCoursesInCategory(session, selected.id);
@@ -313,7 +320,7 @@ export function CategoriesAdminDashboard({
       const unique = [...new Set(merged)];
       const r = await putCourseCategories(session, courseId, { categoryIds: unique });
       if (!r.ok) {
-        setError(r.error.message);
+        setFatalError(r.error);
         return;
       }
     }
@@ -338,32 +345,23 @@ export function CategoriesAdminDashboard({
   }
 
   if (!session && !loading) {
-    return (
-      <main className={styles.shell}>
-        <p>
-          Sign in from the{" "}
-          <Link href="/sign-in">sign-in page</Link> (learner or instructor) to manage categories.
-        </p>
-      </main>
-    );
+    return <AdminSignInRequired context="manage course categories" />;
   }
 
   if (loading) {
-    return (
-      <main className={styles.shell} aria-busy="true">
-        <p>Loading categories…</p>
-      </main>
-    );
+    return <AdminLoading label="Loading categories…" />;
   }
 
-  if (error) {
+  if (fatalError) {
     return (
-      <main className={styles.shell}>
-        <p role="alert">{error}</p>
-        <button type="button" className={`${styles.btn} ${styles.btnSecondary}`} onClick={() => session && void loadCategories(session)}>
-          Retry
-        </button>
-      </main>
+      <AdminLoadError
+        error={fatalError}
+        onRetry={() => {
+          if (session) {
+            void loadCategories(session);
+          }
+        }}
+      />
     );
   }
 
@@ -412,8 +410,8 @@ export function CategoriesAdminDashboard({
       <div className={styles.topBar}>
         <h1 className={styles.titleRow}>
           Course categories{" "}
-          <span className={styles.wireTag} style={{ opacity: 0.85 }}>
-            Admin
+          <span className={styles.staffTag} style={{ opacity: 0.85 }}>
+            Staff
           </span>
         </h1>
       </div>
@@ -500,9 +498,14 @@ export function CategoriesAdminDashboard({
                 <h3 id="courses-title" className={styles.sectionTitle}>
                   Courses in this category
                 </h3>
+                {coursesInCategoryError ? (
+                  <p role="alert" className={styles.caption}>
+                    {coursesInCategoryError}
+                  </p>
+                ) : null}
                 {coursesLoading ? (
                   <p>Loading courses…</p>
-                ) : coursesInCategory.length === 0 ? (
+                ) : coursesInCategoryError ? null : coursesInCategory.length === 0 ? (
                   <p className={styles.caption}>No courses in this category yet.</p>
                 ) : (
                   <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>

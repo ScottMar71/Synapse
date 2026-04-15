@@ -5,9 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { postProvisionLearner, probeAdminRoute, type LmsApiSession } from "../../../../lib/lms-api-client";
+import {
+  formatTenantAdminError,
+  postProvisionLearner,
+  probeAdminRoute,
+  type LmsApiSession
+} from "../../../../lib/lms-api-client";
 import { getSession } from "../../../../lib/lms-session";
-import styles from "../../learners-wireframe/learners-wireframe.module.css";
+import { AdminLoading, AdminSignInRequired } from "../../admin-page-states";
+import styles from "../../admin-learners-shell.module.css";
 
 const EMAIL_EMPTY = "Enter an email address.";
 const EMAIL_INVALID = "Enter a valid email address.";
@@ -63,7 +69,7 @@ export default function AddLearnerPage(): ReactElement {
       displayName: displayName.trim().length > 0 ? displayName.trim() : undefined
     });
     if (!res.ok) {
-      setSubmitError(res.error.message);
+      setSubmitError(formatTenantAdminError(res.error));
       setSubmitting(false);
       return;
     }
@@ -71,22 +77,11 @@ export default function AddLearnerPage(): ReactElement {
   }
 
   if (!session && !loading) {
-    return (
-      <main className={styles.shell}>
-        <p>
-          Sign in from the{" "}
-          <Link href="/sign-in">sign-in page</Link> as an admin to add learners.
-        </p>
-      </main>
-    );
+    return <AdminSignInRequired context="add learners (tenant admins only)" />;
   }
 
   if (loading) {
-    return (
-      <main className={styles.shell} aria-busy="true">
-        <p>Loading…</p>
-      </main>
-    );
+    return <AdminLoading label="Loading…" />;
   }
 
   if (!isAdmin) {
@@ -118,7 +113,7 @@ export default function AddLearnerPage(): ReactElement {
       <div className={styles.topBar}>
         <h1 className={styles.titleRow}>
           Add learner
-          <span className={styles.wireTag} style={{ opacity: 0.85 }}>
+          <span className={styles.staffTag} style={{ opacity: 0.85 }}>
             Admin
           </span>
         </h1>

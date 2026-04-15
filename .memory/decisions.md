@@ -69,3 +69,10 @@
 - Context: GDPR-ready LMS needs correlation IDs, structured logs, audit trails for sensitive API actions, and baseline SLO signals without mandating a specific APM vendor.
 - Decision: Implement `AsyncLocalStorage` for `requestId`, JSON request lines to stdout, `type: "audit"` lines after successful sensitive LMS operations, `GET /health` and `GET /internal/metrics` on the Hono app, and Next.js middleware that forwards or generates `x-request-id`. Document SLO/alert placeholders under `infra/observability/`.
 - Status: Active
+
+### 010 - Production admin shell: cookie gate, shared UX, wireframe redirects
+
+- Date: 2026-04-15
+- Context: Admin categories, learners, and course metadata were API-backed but reused wireframe CSS, mixed loading/error patterns, and did not gate `/admin` at the edge; course `GET` can succeed for learners while staff editing requires a separate guard.
+- Decision: Extend Next middleware so `/admin` requires the same session cookies as other protected shells. Centralize sign-in / loading / retry / staff-forbidden states in `admin-page-states.tsx`, add `formatTenantAdminError` for consistent operator copy, and call `probeInstructorRoute` before loading the course editor. Retire static admin wireframe implementations; keep `*-wireframe` paths as redirects to production routes and move production styles to `admin-*-shell.module.css` where applicable.
+- Status: Active
