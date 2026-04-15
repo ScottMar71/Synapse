@@ -95,6 +95,9 @@ export function buildApp(dependencies: AppDependencies = {}): Hono {
     createTenantRoleGuard(resolvedDependencies, ["INSTRUCTOR", "ADMIN"]),
     async (context) => {
       const tenantId = context.req.param("tenantId");
+      if (!tenantId) {
+        return context.json({ error: { message: "tenantId is required" } }, 400);
+      }
       const courses = await resolvedDependencies.dataAccess.listCoursesForTenant(tenantId);
       return context.json({ data: { courses } });
     }
@@ -105,6 +108,9 @@ export function buildApp(dependencies: AppDependencies = {}): Hono {
     createTenantRoleGuard(resolvedDependencies, ["INSTRUCTOR", "ADMIN"]),
     async (context) => {
       const tenantId = context.req.param("tenantId");
+      if (!tenantId) {
+        return context.json({ error: { message: "tenantId is required" } }, 400);
+      }
       const learners = await resolvedDependencies.dataAccess.listLearnersForTenant(tenantId);
       return context.json({ data: { learners } });
     }
