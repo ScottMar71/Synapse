@@ -1,24 +1,23 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { parseBearerToken } from "@conductor/auth";
-
 export function middleware(request: NextRequest): NextResponse {
-  if (!request.nextUrl.pathname.startsWith("/protected")) {
+  const { pathname } = request.nextUrl;
+  if (!pathname.startsWith("/learn") && !pathname.startsWith("/instructor")) {
     return NextResponse.next();
   }
 
-  const authorizationHeader = request.headers.get("authorization") ?? undefined;
-  const bearerToken = parseBearerToken(authorizationHeader);
-  const tenantId = request.headers.get("x-tenant-id");
-
-  if (!bearerToken || !tenantId) {
-    return NextResponse.redirect(new URL("/", request.url));
+  const token = request.cookies.get("lms_token")?.value;
+  const tenant = request.cookies.get("lms_tenant")?.value;
+  if (!token || !tenant) {
+    const signIn = new URL("/sign-in", request.url);
+    signIn.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+    return NextResponse.redirect(signIn);
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/protected/:path*"]
+  matcher: ["/learn/:path*", "/instructor/:path*"]
 };
