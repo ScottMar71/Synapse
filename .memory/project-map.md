@@ -43,5 +43,6 @@
 
 ## Notes
 
+- Conductor: v1 initiative is **done**; active work is tracked under **Admin UX & course authoring completion** (categories, learners, course editor persistence).
 - Expand this file with real apps, packages, and infrastructure as the repo grows.
 - Keep entries short and factual so future sessions can scan them quickly.

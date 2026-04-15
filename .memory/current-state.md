@@ -33,7 +33,7 @@
 
 ## In Progress
 
-- Next deliverables remain pending (domain APIs, web core journeys, GDPR controls, observability beyond deployment docs).
+- **Conductor**: Initiative *Synapse LMS v1 for external client enablement* is **`done`** (all v1 deliverables complete). Active initiative: **Admin UX & course authoring completion** (`in_progress`) with three todo deliverables: admin course categories, admin learners flows, and course editor persistence (blocked by categories). PRD: *LMS admin & course authoring (post-v1)*.
 
 ## Deployment
 

@@ -56,6 +56,13 @@
 - Decision: Expose `GET /internal/metrics` without user authentication; rely on **network policy** (private network, allowlist, or platform-only access) in production. Documented in `infra/observability/README.md`.
 - Status: Active
 
+### 010 - Close v1 initiative in Conductor; track admin work as a new initiative
+
+- Date: 2026-04-15
+- Context: All v1 LMS deliverables were complete while the initiative stage still read `tech_breakdown`; follow-on work is largely admin wireframes and course editor persistence rather than the original v1 bet.
+- Decision: Mark the **Synapse LMS v1** initiative **`done`**. Create a **new PRD and initiative** (*Admin UX & course authoring completion*) with one outcome and three deliverables (categories, learners, course editor persistence with dependency on categories). Score RICE and add baseline design notes on the outcome so the pipeline warnings clear.
+- Status: Active
+
 ### 009 - API observability via stdout and in-process metrics
 
 - Date: 2026-04-15
