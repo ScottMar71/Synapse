@@ -24,7 +24,20 @@ function redirectWithRequestId(request: NextRequest, url: URL): NextResponse {
 }
 
 export function middleware(request: NextRequest): NextResponse {
-  if (!request.nextUrl.pathname.startsWith("/protected")) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/learn") || pathname.startsWith("/instructor")) {
+    const token = request.cookies.get("lms_token")?.value;
+    const tenant = request.cookies.get("lms_tenant")?.value;
+    if (!token || !tenant) {
+      const signIn = new URL("/sign-in", request.url);
+      signIn.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+      return redirectWithRequestId(request, signIn);
+    }
+    return nextWithRequestId(request);
+  }
+
+  if (!pathname.startsWith("/protected")) {
     return nextWithRequestId(request);
   }
 
