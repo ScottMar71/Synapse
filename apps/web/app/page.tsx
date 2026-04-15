@@ -31,17 +31,41 @@ export default function HomePage(): ReactElement {
           <p style={{ margin: "0 0 var(--space-4)", color: "var(--color-text-muted)", fontSize: "0.875rem" }}>
             Course authoring wireframe: metadata, SCORM upload, and learning-time assistant.
           </p>
-          <Link
-            href="/admin/courses/wireframe-demo"
-            style={{
-              display: "inline-flex",
-              fontWeight: 600,
-              fontSize: "0.875rem",
-              textDecoration: "none"
-            }}
-          >
-            Open admin course page →
-          </Link>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <Link
+              href="/admin/courses/wireframe-demo"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Open admin course page →
+            </Link>
+            <Link
+              href="/admin/learners-wireframe"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Learners list wireframe →
+            </Link>
+            <Link
+              href="/admin/categories-wireframe"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Course categories wireframe →
+            </Link>
+          </div>
         </section>
         <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "0.875rem" }}>
           Learner area: <Link href="/protected">/protected</Link>
