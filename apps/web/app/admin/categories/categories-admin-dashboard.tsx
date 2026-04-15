@@ -342,7 +342,7 @@ export function CategoriesAdminDashboard({
       <main className={styles.shell}>
         <p>
           Sign in from the{" "}
-          <Link href="/login">login page</Link> (learner or instructor) to manage categories.
+          <Link href="/sign-in">sign-in page</Link> (learner or instructor) to manage categories.
         </p>
       </main>
     );

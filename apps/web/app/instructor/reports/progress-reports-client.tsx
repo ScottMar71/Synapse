@@ -177,7 +177,7 @@ export function ProgressReportsClient({ variant }: ProgressReportsClientProps): 
           {" "}
           ·{" "}
         </span>
-        <Link href="/admin/categories">Admin</Link>
+        <Link href="/">Site hub</Link>
         <span style={{ color: "var(--color-text-muted)" }} aria-hidden>
           {" "}
           · Progress reports

@@ -20,7 +20,7 @@ export default async function AdminCoursePage({ params }: AdminCoursePageProps):
               <Link href="/">Home</Link>
             </li>
             <li>
-              <Link href="/admin/categories">Admin</Link>
+              <Link href="/">Site hub</Link>
             </li>
             <li>
               <span>Courses</span>
