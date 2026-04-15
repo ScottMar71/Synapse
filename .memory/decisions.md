@@ -41,3 +41,10 @@
 - Context: Production needs repeatable deploys with EU data residency and a clear split between the Next.js app and the Hono API.
 - Decision: Use **two Vercel projects** (`apps/web` and `apps/api`) with root-level `npm ci` and dedicated `build:vercel-*` scripts; run the API on Vercel via `hono/vercel` (`apps/api/api/[[...route]].ts`). Use **Supabase in an EU region** with **pooled `DATABASE_URL`** and **`DIRECT_URL`** for Prisma migrations. Apply migrations with `prisma migrate deploy` using documented procedures rather than ad hoc SQL.
 - Status: Active
+
+### 007 - Platform adapters as the only vendor seam for API I/O
+
+- Date: 2026-04-15
+- Context: The deliverable requires moving `apps/api` across hosts without rewriting domain code; background work and queues must not leak SDKs into routes.
+- Decision: Extend **`PlatformAdapters`** with **`jobs`** (`enqueueJob`) alongside auth, storage, email, and queue; add **`mergePlatformAdapters`** for composition. Document the split in **`infra/portability/hosting-split-playbook.md`**. Prove interchangeability with **Vitest smoke** tests comparing two adapter construction styles to identical HTTP responses.
+- Status: Active

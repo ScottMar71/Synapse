@@ -13,6 +13,7 @@ Configure Vercel **Production Branch** to `main` and enable **Preview Deployment
 
 ## Quick links
 
+- [Hosting split (API off Vercel / alternate runtimes)](../portability/hosting-split-playbook.md)
 - [Vercel project setup](./vercel.md)
 - [Supabase EU + connection strings](./supabase-eu.md)
 - [Database migrations & rollback](./database-migrations.md)

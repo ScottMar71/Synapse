@@ -10,7 +10,7 @@ import {
   type CourseListItem,
   type LearnerListItem
 } from "@conductor/database";
-import { createNoopPlatformAdapters } from "@conductor/platform";
+import { createNoopPlatformAdapters, type PlatformAdapters } from "@conductor/platform";
 
 const contract: LmsPlatformContract = {
   apiBasePath: "/api/v1",
@@ -18,7 +18,7 @@ const contract: LmsPlatformContract = {
 };
 
 type AppDependencies = {
-  adapters?: ReturnType<typeof createNoopPlatformAdapters>;
+  adapters?: PlatformAdapters;
   membershipStore?: {
     getRolesForUser: (input: { tenantId: string; userId: string }) => Promise<MembershipRole[]>;
   };
