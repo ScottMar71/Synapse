@@ -20,7 +20,7 @@ export default async function CoursePlayerWireframePage({ params }: PlayerWirefr
               <Link href="/">Home</Link>
             </li>
             <li>
-              <Link href="/admin/categories">Admin</Link>
+              <Link href="/">Site hub</Link>
             </li>
             <li>
               <Link href={`/admin/courses/${courseId}`}>Course editor</Link>

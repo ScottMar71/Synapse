@@ -140,7 +140,7 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
     return (
       <p>
         Sign in from the{" "}
-        <Link href="/login">login page</Link> (learner or instructor) to edit courses.
+        <Link href="/sign-in">sign-in page</Link> (learner or instructor) to edit courses.
       </p>
     );
   }
