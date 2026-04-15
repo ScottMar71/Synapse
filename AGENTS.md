@@ -22,6 +22,27 @@ This repository is managed by **Conductor** — work tracking (initiatives, deli
 - Read `.memory/architecture.md` and `.memory/current-state.md` when planning or changing system structure.
 - Keep reusable agent instructions in the generated client-specific folders instead of scattering prompt text across the repo.
 
+## Next.js build troubleshooting (stale `.next`)
+
+If `npm run build` fails while prerendering a route (for example `/404`) with **MODULE_NOT_FOUND** for a **numeric** webpack chunk under `.next/server` (for example `Cannot find module './383.js'`), the local `.next` output is likely corrupted or out of sync with the current build. **Fix:** remove the web app cache and rebuild.
+
+```bash
+rm -rf apps/web/.next
+npm run build -w @conductor/web
+```
+
+Or use the clean build script (same effect for `@conductor/web`):
+
+```bash
+npm run build:clean
+```
+
+CI uses a fresh checkout for each run and does not persist `apps/web/.next`, so this issue is normally **local-only**.
+
+## Web app lint (`@conductor/web`)
+
+`apps/web` uses the ESLint CLI with a committed flat config (`eslint.config.mjs`) and `eslint-config-next` (Core Web Vitals). The `lint` script is `eslint .`, which exits successfully without interactive setup (for example in CI or headless shells). `next lint` is deprecated toward the standalone ESLint CLI; Next’s migration codemod is available as `npx @next/codemod@canary next-lint-to-eslint-cli .` if you need to refresh an older project. This repo already follows that direction.
+
 ## Bootstrap Ownership
 
 - This repo was initialized from the `default` profile.

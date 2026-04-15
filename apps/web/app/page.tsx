@@ -44,6 +44,17 @@ export default function HomePage(): ReactElement {
               Open admin course page →
             </Link>
             <Link
+              href="/admin/learners"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Learners directory (admin) →
+            </Link>
+            <Link
               href="/admin/learners-wireframe"
               style={{
                 display: "inline-flex",
@@ -53,6 +64,17 @@ export default function HomePage(): ReactElement {
               }}
             >
               Learners list wireframe →
+            </Link>
+            <Link
+              href="/admin/categories"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Course categories (admin) →
             </Link>
             <Link
               href="/admin/categories-wireframe"
@@ -67,9 +89,44 @@ export default function HomePage(): ReactElement {
             </Link>
           </div>
         </section>
-        <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "0.875rem" }}>
-          Learner area: <Link href="/protected">/protected</Link>
-        </p>
+        <section style={{ marginTop: "var(--space-4)" }}>
+          <h2 style={{ margin: "0 0 var(--space-3)", fontSize: "1rem" }}>Core journeys</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", alignItems: "flex-start" }}>
+            <Link
+              href="/sign-in"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Sign in (dev token) →
+            </Link>
+            <Link
+              href="/learn"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Learner dashboard →
+            </Link>
+            <Link
+              href="/instructor"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Instructor overview →
+            </Link>
+          </div>
+        </section>
       </div>
     </main>
   );

@@ -1,35 +1,21 @@
 import { describe, expect, it } from "vitest";
 
+import type { AuthAdapter } from "@conductor/platform";
+import { createNoopPlatformAdapters, mergePlatformAdapters } from "@conductor/platform";
+
 import { buildApp } from "./index";
 
 const tenantA = "tenant-a";
 const tenantB = "tenant-b";
 
+function adaptersWithAuth(auth: AuthAdapter) {
+  return mergePlatformAdapters(createNoopPlatformAdapters(), { auth });
+}
+
 describe("API auth tenant RBAC guards", () => {
   it("denies unauthenticated requests", async () => {
     const app = buildApp({
-      adapters: {
-        auth: {
-          async validateToken() {
-            return null;
-          }
-        },
-        email: {
-          async sendEmail() {
-            return;
-          }
-        },
-        queue: {
-          async enqueue() {
-            return;
-          }
-        },
-        storage: {
-          async putObject() {
-            return;
-          }
-        }
-      },
+      adapters: createNoopPlatformAdapters(),
       membershipStore: {
         async getRolesForUser() {
           return [];
@@ -43,28 +29,11 @@ describe("API auth tenant RBAC guards", () => {
 
   it("denies authenticated users missing required role", async () => {
     const app = buildApp({
-      adapters: {
-        auth: {
-          async validateToken() {
-            return { userId: "user-1", tenantId: tenantA };
-          }
-        },
-        email: {
-          async sendEmail() {
-            return;
-          }
-        },
-        queue: {
-          async enqueue() {
-            return;
-          }
-        },
-        storage: {
-          async putObject() {
-            return;
-          }
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
         }
-      },
+      }),
       membershipStore: {
         async getRolesForUser() {
           return ["LEARNER"];
@@ -82,28 +51,11 @@ describe("API auth tenant RBAC guards", () => {
 
   it("denies cross-tenant access attempts", async () => {
     const app = buildApp({
-      adapters: {
-        auth: {
-          async validateToken() {
-            return { userId: "user-1", tenantId: tenantA };
-          }
-        },
-        email: {
-          async sendEmail() {
-            return;
-          }
-        },
-        queue: {
-          async enqueue() {
-            return;
-          }
-        },
-        storage: {
-          async putObject() {
-            return;
-          }
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
         }
-      },
+      }),
       membershipStore: {
         async getRolesForUser() {
           return ["ADMIN"];
@@ -121,28 +73,11 @@ describe("API auth tenant RBAC guards", () => {
 
   it("allows valid tenant and role access", async () => {
     const app = buildApp({
-      adapters: {
-        auth: {
-          async validateToken() {
-            return { userId: "user-1", tenantId: tenantA };
-          }
-        },
-        email: {
-          async sendEmail() {
-            return;
-          }
-        },
-        queue: {
-          async enqueue() {
-            return;
-          }
-        },
-        storage: {
-          async putObject() {
-            return;
-          }
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
         }
-      },
+      }),
       membershipStore: {
         async getRolesForUser() {
           return ["ADMIN"];
@@ -160,28 +95,11 @@ describe("API auth tenant RBAC guards", () => {
 });
 
 function noopAdapters() {
-  return {
-    auth: {
-      async validateToken() {
-        return { userId: "user-1", tenantId: tenantA };
-      }
-    },
-    email: {
-      async sendEmail() {
-        return;
-      }
-    },
-    queue: {
-      async enqueue() {
-        return;
-      }
-    },
-    storage: {
-      async putObject() {
-        return;
-      }
+  return adaptersWithAuth({
+    async validateToken() {
+      return { userId: "user-1", tenantId: tenantA };
     }
-  };
+  });
 }
 
 describe("domain list endpoints", () => {
@@ -203,9 +121,12 @@ describe("domain list endpoints", () => {
               code: "CRS-1",
               title: "Intro",
               description: null,
+              objectives: null,
               publishedAt: null,
+              archivedAt: null,
               createdAt: new Date("2024-01-01T00:00:00.000Z"),
-              updatedAt: new Date("2024-01-02T00:00:00.000Z")
+              updatedAt: new Date("2024-01-02T00:00:00.000Z"),
+              categoryIds: []
             }
           ];
         },
@@ -224,6 +145,52 @@ describe("domain list endpoints", () => {
     };
     expect(body.data.courses).toHaveLength(1);
     expect(body.data.courses[0]?.title).toBe("Intro");
+  });
+
+  it("patches course when instructor and data access is mocked", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async updateCourse() {
+          return {
+            ok: true,
+            course: {
+              id: "course-1",
+              tenantId: tenantA,
+              code: "CRS-1",
+              title: "Updated",
+              description: null,
+              objectives: null,
+              publishedAt: null,
+              archivedAt: null,
+              createdAt: "2024-01-01T00:00:00.000Z",
+              updatedAt: "2024-01-02T00:00:00.000Z",
+              categoryIds: []
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/courses/course-1`, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ title: "Updated" })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { course: { title: string } } };
+    expect(body.data.course.title).toBe("Updated");
   });
 
   it("returns learners for admin when data access is mocked", async () => {
@@ -264,6 +231,78 @@ describe("domain list endpoints", () => {
     expect(body.data.learners[0]?.email).toBe("a@example.com");
   });
 
+  it("denies course category directory for learner role", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async listCourseCategoriesForTenant() {
+          throw new Error("listCourseCategoriesForTenant should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/course-categories`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("returns course categories for instructor when data access is mocked", async () => {
+    const iso = "2024-01-01T00:00:00.000Z";
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async listCourseCategoriesForTenant(tenantId: string) {
+          expect(tenantId).toBe(tenantA);
+          return [
+            {
+              id: "cat-1",
+              tenantId,
+              parentId: null,
+              name: "Root",
+              sortOrder: 0,
+              directCourseCount: 0,
+              createdAt: iso,
+              updatedAt: iso
+            }
+          ];
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/course-categories`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { categories: { id: string; name: string }[] };
+    };
+    expect(body.data.categories).toHaveLength(1);
+    expect(body.data.categories[0]?.name).toBe("Root");
+  });
+
   it("denies learners list for users without instructor or admin role", async () => {
     const app = buildApp({
       adapters: noopAdapters(),
@@ -286,6 +325,76 @@ describe("domain list endpoints", () => {
       headers: { authorization: "Bearer valid-token" }
     });
     expect(response.status).toBe(403);
+  });
+
+  it("denies learner provisioning for non-admin roles", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async provisionLearnerForTenant() {
+          throw new Error("provisionLearnerForTenant should not run for instructor");
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/learners`, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ email: "new@example.com" })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("provisions learner for admin when data access is mocked", async () => {
+    const iso = "2024-06-01T00:00:00.000Z";
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["ADMIN"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async provisionLearnerForTenant() {
+          return {
+            ok: true,
+            learner: {
+              id: "learner-new",
+              email: "new@example.com",
+              displayName: "New Learner",
+              createdAt: new Date(iso),
+              updatedAt: new Date(iso)
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/learners`, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ email: "new@example.com", displayName: "New Learner" })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { learner: { email: string } } };
+    expect(body.data.learner.email).toBe("new@example.com");
   });
 
   it("serves OpenAPI JSON at /doc", async () => {
@@ -319,9 +428,12 @@ describe("domain list endpoints", () => {
               code: "P",
               title: "Public",
               description: null,
+              objectives: null,
               publishedAt: "2024-01-01T00:00:00.000Z",
+              archivedAt: null,
               createdAt: "2024-01-01T00:00:00.000Z",
-              updatedAt: "2024-01-01T00:00:00.000Z"
+              updatedAt: "2024-01-01T00:00:00.000Z",
+              categoryIds: []
             }
           ];
         },
@@ -416,9 +528,12 @@ describe("domain list endpoints", () => {
               code: "C",
               title: "Course",
               description: null,
+              objectives: null,
               publishedAt: iso,
+              archivedAt: null,
               createdAt: iso,
-              updatedAt: iso
+              updatedAt: iso,
+              categoryIds: []
             }
           };
         },
@@ -499,5 +614,160 @@ describe("domain list endpoints", () => {
       data: { submission: { status: string } };
     };
     expect(submittedBody.data.submission.status).toBe("SUBMITTED");
+  });
+});
+
+describe("progress report endpoints", () => {
+  it("denies progress report summary for learner role", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async getProgressReportSummary() {
+          throw new Error("getProgressReportSummary should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/reports/progress/summary`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("returns progress report summary for instructor when data access is mocked", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async getProgressReportSummary(tenantId: string) {
+          expect(tenantId).toBe(tenantA);
+          return {
+            totalEnrollments: 3,
+            activeEnrollments: 2,
+            completedEnrollments: 1,
+            averageCourseProgressPercent: 44.5,
+            distinctLearners: 2
+          };
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/reports/progress/summary`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { summary: { totalEnrollments: number; averageCourseProgressPercent: number | null } };
+    };
+    expect(body.data.summary.totalEnrollments).toBe(3);
+    expect(body.data.summary.averageCourseProgressPercent).toBe(44.5);
+  });
+
+  it("returns 400 for invalid progress report cursor", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async listProgressReportRows() {
+          throw new Error("listProgressReportRows should not run with bad cursor");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantA}/reports/progress/rows?cursor=not-a-valid-cursor`,
+      { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("observability", () => {
+  it("echoes x-request-id and exposes internal metrics", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["ADMIN"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listPublishedCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async getCourseForViewer() {
+          return { ok: false, error: { code: "NOT_FOUND", message: "unused" } };
+        },
+        async createEnrollment() {
+          return { ok: false, error: { code: "CONFLICT", message: "unused" } };
+        },
+        async listEnrollmentsForUser() {
+          return [];
+        },
+        async upsertProgressForUser() {
+          return { ok: false, error: { code: "NOT_FOUND", message: "unused" } };
+        },
+        async listProgressForUser() {
+          return [];
+        },
+        async upsertSubmissionDraft() {
+          return { ok: false, error: { code: "NOT_FOUND", message: "unused" } };
+        },
+        async submitAssessmentAttempt() {
+          return { ok: false, error: { code: "NOT_FOUND", message: "unused" } };
+        }
+      }
+    });
+
+    const requestId = "client-correlation-id";
+    const health = await app.request("/health", {
+      headers: { "x-request-id": requestId }
+    });
+    expect(health.headers.get("x-request-id")).toBe(requestId);
+
+    const metrics = await app.request("/internal/metrics");
+    expect(metrics.status).toBe(200);
+    const body = (await metrics.json()) as {
+      data: { requests: { total: number }; service: string };
+    };
+    expect(body.data.service).toBe("synapse-lms-api");
+    expect(body.data.requests.total).toBeGreaterThanOrEqual(2);
   });
 });

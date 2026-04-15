@@ -2,13 +2,20 @@
   "name": "lms",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": ">=22"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=@conductor/web",
+    "dev:api": "npm run dev --workspace=@conductor/api",
     "build": "npm run --workspaces build",
+    "build:clean": "npm run build:clean --workspace=@conductor/web",
+    "build:vercel-web": "npm run build -w @conductor/contracts && npm run build -w @conductor/auth && npm run build -w @conductor/web",
+    "build:vercel-api": "npm run build -w @conductor/contracts && npm run build -w @conductor/auth && npm run build -w @conductor/platform && npm run build -w @conductor/database && npm run build -w @conductor/api",
     "typecheck": "npm run --workspaces typecheck",
     "lint": "npm run --workspaces lint",
     "test": "npm run --workspaces --if-present test"

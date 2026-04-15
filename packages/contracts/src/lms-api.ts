@@ -10,9 +10,11 @@ const isoDateTime = z.string().datetime({ offset: true });
 
 export const lmsApiTags = {
   catalog: "Course catalog",
+  categories: "Course categories",
   enrollments: "Enrollments",
   progress: "Progress",
-  assessments: "Assessments"
+  assessments: "Assessments",
+  reports: "Reports"
 } as const;
 
 export const enrollmentStatusSchema = z.enum(["ACTIVE", "COMPLETED", "DROPPED"]);
@@ -26,11 +28,59 @@ export const courseDtoSchema = z
     code: z.string(),
     title: z.string(),
     description: z.string().nullable(),
+    objectives: z.string().nullable(),
     publishedAt: isoDateTime.nullable(),
+    archivedAt: isoDateTime.nullable(),
+    createdAt: isoDateTime,
+    updatedAt: isoDateTime,
+    categoryIds: z.array(z.string())
+  })
+  .openapi("Course");
+
+export const coursePatchBodySchema = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    description: z.string().max(50000).nullable().optional(),
+    objectives: z.string().max(50000).nullable().optional(),
+    publishedAt: isoDateTime.nullable().optional(),
+    archived: z.boolean().optional()
+  })
+  .openapi("CoursePatchBody");
+
+export const courseCategoryDtoSchema = z
+  .object({
+    id: z.string(),
+    tenantId: z.string(),
+    parentId: z.string().nullable(),
+    name: z.string(),
+    sortOrder: z.number().int(),
+    directCourseCount: z.number().int(),
     createdAt: isoDateTime,
     updatedAt: isoDateTime
   })
-  .openapi("Course");
+  .openapi("CourseCategory");
+
+export const courseCategoryCreateBodySchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    parentId: z.string().min(1).nullable().optional(),
+    sortOrder: z.number().int().optional()
+  })
+  .openapi("CourseCategoryCreateBody");
+
+export const courseCategoryPatchBodySchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    parentId: z.string().min(1).nullable().optional(),
+    sortOrder: z.number().int().optional()
+  })
+  .openapi("CourseCategoryPatchBody");
+
+export const courseCategoriesPutBodySchema = z
+  .object({
+    categoryIds: z.array(z.string().min(1))
+  })
+  .openapi("CourseCategoriesPutBody");
 
 export const enrollmentDtoSchema = z
   .object({
@@ -94,6 +144,68 @@ export const progressPutBodySchema = z
   })
   .openapi("ProgressPutBody");
 
+export const learnerSummarySchema = z
+  .object({
+    id: z.string(),
+    email: z.string(),
+    displayName: z.string(),
+    createdAt: isoDateTime,
+    updatedAt: isoDateTime
+  })
+  .openapi("LearnerSummary");
+
+export const learnerProvisionBodySchema = z
+  .object({
+    email: z.string().min(1).email(),
+    displayName: z.string().min(1).max(200).optional()
+  })
+  .openapi("LearnerProvisionBody");
+
+export const progressReportSummaryDtoSchema = z
+  .object({
+    totalEnrollments: z.number().int(),
+    activeEnrollments: z.number().int(),
+    completedEnrollments: z.number().int(),
+    averageCourseProgressPercent: z.number().nullable(),
+    distinctLearners: z.number().int()
+  })
+  .openapi("ProgressReportSummary");
+
+export const progressReportRowDtoSchema = z
+  .object({
+    enrollmentId: z.string(),
+    userId: z.string(),
+    userEmail: z.string(),
+    userDisplayName: z.string(),
+    courseId: z.string(),
+    courseCode: z.string(),
+    courseTitle: z.string(),
+    enrollmentStatus: enrollmentStatusSchema,
+    enrolledAt: isoDateTime,
+    enrollmentCompletedAt: isoDateTime.nullable(),
+    courseProgressPercent: z.number().int().min(0).max(100),
+    lastProgressAt: isoDateTime.nullable()
+  })
+  .openapi("ProgressReportRow");
+
+/** Shared query shape for staff progress report endpoints (path + query). */
+export const progressReportSharedQuerySchema = z.object({
+  courseId: z.string().min(1).optional(),
+  learnerId: z.string().min(1).optional(),
+  enrolledFrom: isoDateTime.optional(),
+  enrolledTo: isoDateTime.optional()
+});
+
+export const progressReportRowsQuerySchema = progressReportSharedQuerySchema.extend({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  cursor: z.string().min(1).optional()
+});
+
+export type ProgressReportSummaryDto = z.infer<typeof progressReportSummaryDtoSchema>;
+export type ProgressReportRowDto = z.infer<typeof progressReportRowDtoSchema>;
+export type ProgressReportSharedQuery = z.infer<typeof progressReportSharedQuerySchema>;
+export type ProgressReportRowsQuery = z.infer<typeof progressReportRowsQuerySchema>;
+
 export const apiErrorBodySchema = z
   .object({
     error: z.string()
@@ -101,8 +213,15 @@ export const apiErrorBodySchema = z
   .openapi("ApiError");
 
 export type CourseDto = z.infer<typeof courseDtoSchema>;
+export type CoursePatchBody = z.infer<typeof coursePatchBodySchema>;
+export type CourseCategoryDto = z.infer<typeof courseCategoryDtoSchema>;
+export type CourseCategoryCreateBody = z.infer<typeof courseCategoryCreateBodySchema>;
+export type CourseCategoryPatchBody = z.infer<typeof courseCategoryPatchBodySchema>;
+export type CourseCategoriesPutBody = z.infer<typeof courseCategoriesPutBodySchema>;
 export type EnrollmentDto = z.infer<typeof enrollmentDtoSchema>;
 export type ProgressDto = z.infer<typeof progressDtoSchema>;
 export type SubmissionDto = z.infer<typeof submissionDtoSchema>;
 export type EnrollmentCreateBody = z.infer<typeof enrollmentCreateBodySchema>;
 export type ProgressPutBody = z.infer<typeof progressPutBodySchema>;
+export type LearnerSummaryDto = z.infer<typeof learnerSummarySchema>;
+export type LearnerProvisionBody = z.infer<typeof learnerProvisionBodySchema>;
