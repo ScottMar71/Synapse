@@ -25,8 +25,13 @@
 ## Apps / api
 
 - `apps/api`: Hono `OpenAPIHono` app (`src/build-app.ts`) with LMS routes under `/api/v1/tenants/:tenantId` (catalog, enrollments, progress, assessment submissions), OpenAPI at `/doc`, Swagger UI at `/reference`.
+- `apps/api/src/observability/`: structured JSON request logging, `x-request-id` correlation (AsyncLocalStorage), stdout audit lines for sensitive routes, in-process metrics at `GET /internal/metrics`; `GET /health` for probes.
 - `packages/contracts/src/lms-api.ts`: Zod/OpenAPI DTO schemas for LMS HTTP payloads.
 - `packages/database/src/lms-domain.ts`: tenant-scoped LMS domain operations (Prisma only).
+
+## Infra
+
+- `infra/observability/`: SLO targets, error-budget policy sketch, alert routing placeholders, and API/web runbook stubs.
 
 ## Notes
 

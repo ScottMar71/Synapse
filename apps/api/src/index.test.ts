@@ -501,3 +501,62 @@ describe("domain list endpoints", () => {
     expect(submittedBody.data.submission.status).toBe("SUBMITTED");
   });
 });
+
+describe("observability", () => {
+  it("echoes x-request-id and exposes internal metrics", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["ADMIN"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listPublishedCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async getCourseForViewer() {
+          return { ok: false, error: { code: "NOT_FOUND", message: "unused" } };
+        },
+        async createEnrollment() {
+          return { ok: false, error: { code: "CONFLICT", message: "unused" } };
+        },
+        async listEnrollmentsForUser() {
+          return [];
+        },
+        async upsertProgressForUser() {
+          return { ok: false, error: { code: "NOT_FOUND", message: "unused" } };
+        },
+        async listProgressForUser() {
+          return [];
+        },
+        async upsertSubmissionDraft() {
+          return { ok: false, error: { code: "NOT_FOUND", message: "unused" } };
+        },
+        async submitAssessmentAttempt() {
+          return { ok: false, error: { code: "NOT_FOUND", message: "unused" } };
+        }
+      }
+    });
+
+    const requestId = "client-correlation-id";
+    const health = await app.request("/health", {
+      headers: { "x-request-id": requestId }
+    });
+    expect(health.headers.get("x-request-id")).toBe(requestId);
+
+    const metrics = await app.request("/internal/metrics");
+    expect(metrics.status).toBe(200);
+    const body = (await metrics.json()) as {
+      data: { requests: { total: number }; service: string };
+    };
+    expect(body.data.service).toBe("synapse-lms-api");
+    expect(body.data.requests.total).toBeGreaterThanOrEqual(2);
+  });
+});

@@ -33,6 +33,11 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import type { Context } from "hono";
 
+import { AUDIT_ACTIONS } from "./observability/audit-actions";
+import { emitAuditEvent } from "./observability/audit";
+import { getMetricsSnapshot } from "./observability/metrics";
+import { createObservabilityMiddleware } from "./observability/middleware";
+
 const contract: LmsPlatformContract = {
   apiBasePath: "/api/v1",
   tenantHeaderName: "x-tenant-id"
@@ -141,8 +146,22 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     }
   });
 
+  app.use("*", createObservabilityMiddleware());
+
   app.get("/health", (c) =>
     c.json({ data: { status: "healthy", service: "synapse-lms-api" } }, 200)
+  );
+
+  app.get("/internal/metrics", (c) =>
+    c.json(
+      {
+        data: {
+          service: "synapse-lms-api",
+          ...getMetricsSnapshot()
+        }
+      },
+      200
+    )
   );
 
   const tenantParams = z.object({
@@ -353,6 +372,12 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       const mapped = mapServiceError(result.error);
       return c.json({ error: mapped.message }, mapped.status) as never;
     }
+    emitAuditEvent({
+      action: "enrollment.create",
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId: body.courseId, targetUserId: body.userId }
+    });
     return c.json({ data: { enrollment: result.enrollment } }, 201);
   });
 
@@ -391,6 +416,12 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       return c.json({ error: "FORBIDDEN" }, 403) as never;
     }
     const enrollments = await resolvedDependencies.dataAccess.listEnrollmentsForUser(tenantId, userId);
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.ENROLLMENT_LIST_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { targetUserId: userId }
+    });
     return c.json({ data: { enrollments } }, 200);
   });
 
@@ -451,6 +482,18 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       const mapped = mapServiceError(result.error);
       return c.json({ error: mapped.message }, mapped.status) as never;
     }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.PROGRESS_WRITE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: {
+        subjectUserId: body.userId,
+        courseId: body.courseId,
+        moduleId: body.moduleId ?? null,
+        lessonId: body.lessonId ?? null,
+        scope: body.scope
+      }
+    });
     return c.json({ data: { progress: result.progress } }, 200);
   });
 
@@ -489,6 +532,12 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       return c.json({ error: "FORBIDDEN" }, 403) as never;
     }
     const progress = await resolvedDependencies.dataAccess.listProgressForUser(tenantId, userId);
+    emitAuditEvent({
+      action: "progress.list_read",
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { targetUserId: userId }
+    });
     return c.json({ data: { progress } }, 200);
   });
 
@@ -536,6 +585,12 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       const mapped = mapServiceError(result.error);
       return c.json({ error: mapped.message }, mapped.status) as never;
     }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.ASSESSMENT_DRAFT_SAVE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { assessmentId }
+    });
     return c.json({ data: { submission: result.submission } }, 200);
   });
 
@@ -583,6 +638,12 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       const mapped = mapServiceError(result.error);
       return c.json({ error: mapped.message }, mapped.status) as never;
     }
+    emitAuditEvent({
+      action: "assessment.submit",
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { assessmentId }
+    });
     return c.json({ data: { submission: result.submission } }, 200);
   });
 
@@ -705,6 +766,12 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString()
     }));
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LEARNERS_DIRECTORY_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { resultCount: mapped.length }
+    });
     return c.json({ data: { learners: mapped } }, 200);
   });
 
