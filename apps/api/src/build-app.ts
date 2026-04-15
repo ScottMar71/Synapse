@@ -2,9 +2,15 @@ import { createTenantAuthorizer, parseBearerToken, type MembershipRole } from "@
 import type { LmsPlatformContract } from "@conductor/contracts";
 import {
   apiErrorBodySchema,
+  courseCategoriesPutBodySchema,
+  courseCategoryCreateBodySchema,
+  courseCategoryDtoSchema,
+  courseCategoryPatchBodySchema,
   courseDtoSchema,
   enrollmentCreateBodySchema,
   enrollmentDtoSchema,
+  learnerProvisionBodySchema,
+  learnerSummarySchema,
   lmsApiTags,
   progressDtoSchema,
   progressPutBodySchema,
@@ -12,15 +18,23 @@ import {
   z
 } from "@conductor/contracts";
 import {
+  archiveCourseCategory,
+  createCourseCategory,
   createEnrollment,
   getCourseForViewer,
   getActiveMembershipRoles,
+  listCourseCategoriesForTenant,
   listCoursesForTenant,
+  listCoursesInCategory,
   listEnrollmentsForUser,
   listLearnersForTenant,
   listProgressForUser,
   listPublishedCoursesForTenant,
+  provisionLearnerForTenant,
+  removeCourseFromCategory,
+  setCourseCategoryLinks,
   submitAssessmentAttempt,
+  updateCourseCategory,
   upsertProgressForUser,
   upsertSubmissionDraft,
   type CourseDto,
@@ -49,6 +63,7 @@ type DataAccess = {
   listCoursesForTenant: (tenantId: string) => Promise<CourseListItem[]>;
   listPublishedCoursesForTenant: (tenantId: string) => Promise<CourseDto[]>;
   listLearnersForTenant: (tenantId: string) => Promise<LearnerListItem[]>;
+  provisionLearnerForTenant: typeof provisionLearnerForTenant;
   getCourseForViewer: typeof getCourseForViewer;
   createEnrollment: typeof createEnrollment;
   listEnrollmentsForUser: typeof listEnrollmentsForUser;
@@ -56,6 +71,13 @@ type DataAccess = {
   listProgressForUser: typeof listProgressForUser;
   upsertSubmissionDraft: typeof upsertSubmissionDraft;
   submitAssessmentAttempt: typeof submitAssessmentAttempt;
+  listCourseCategoriesForTenant: typeof listCourseCategoriesForTenant;
+  createCourseCategory: typeof createCourseCategory;
+  updateCourseCategory: typeof updateCourseCategory;
+  archiveCourseCategory: typeof archiveCourseCategory;
+  listCoursesInCategory: typeof listCoursesInCategory;
+  setCourseCategoryLinks: typeof setCourseCategoryLinks;
+  removeCourseFromCategory: typeof removeCourseFromCategory;
 };
 
 type AppDependencies = {
@@ -74,6 +96,9 @@ function mapServiceError(error: ServiceError): { status: 404 | 400 | 403 | 409; 
       return { status: 403, message: error.message };
     case "CONFLICT":
       return { status: 409, message: error.message };
+    case "INVALID_INPUT":
+    case "BAD_REQUEST":
+      return { status: 400, message: error.message };
     default:
       return { status: 400, message: error.message };
   }
@@ -96,6 +121,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     listCoursesForTenant,
     listPublishedCoursesForTenant,
     listLearnersForTenant,
+    provisionLearnerForTenant,
     getCourseForViewer,
     createEnrollment,
     listEnrollmentsForUser,
@@ -103,6 +129,13 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     listProgressForUser,
     upsertSubmissionDraft,
     submitAssessmentAttempt,
+    listCourseCategoriesForTenant,
+    createCourseCategory,
+    updateCourseCategory,
+    archiveCourseCategory,
+    listCoursesInCategory,
+    setCourseCategoryLinks,
+    removeCourseFromCategory,
     ...dependencies.dataAccess
   };
 
@@ -178,6 +211,14 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
 
   const tenantAssessmentParams = tenantParams.extend({
     assessmentId: z.string().min(1).openapi({ param: { name: "assessmentId", in: "path" } })
+  });
+
+  const tenantCategoryParams = tenantParams.extend({
+    categoryId: z.string().min(1).openapi({ param: { name: "categoryId", in: "path" } })
+  });
+
+  const tenantCourseCategoryParams = tenantCourseParams.extend({
+    categoryId: z.string().min(1).openapi({ param: { name: "categoryId", in: "path" } })
   });
 
   const dataEnvelope = <T extends z.ZodType>(schema: T) =>
@@ -256,7 +297,8 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
         description: row.description,
         publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
         createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString()
+        updatedAt: row.updatedAt.toISOString(),
+        categoryIds: row.categoryIds
       }));
       return c.json({ data: { courses: mapped } }, 200);
     }
@@ -727,15 +769,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
           "application/json": {
             schema: dataEnvelope(
               z.object({
-                learners: z.array(
-                  z.object({
-                    id: z.string(),
-                    email: z.string(),
-                    displayName: z.string(),
-                    createdAt: z.string(),
-                    updatedAt: z.string()
-                  })
-                )
+                learners: z.array(learnerSummarySchema)
               })
             )
           }
@@ -773,6 +807,395 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       resource: { resultCount: mapped.length }
     });
     return c.json({ data: { learners: mapped } }, 200);
+  });
+
+  const learnersProvisionRoute = createRoute({
+    method: "post",
+    path: `${base}/tenants/{tenantId}/learners`,
+    tags: ["Diagnostics"],
+    request: {
+      params: tenantParams,
+      body: {
+        content: {
+          "application/json": {
+            schema: learnerProvisionBodySchema
+          }
+        }
+      }
+    },
+    responses: {
+      200: {
+        description: "Learner provisioned",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ learner: learnerSummarySchema }))
+          }
+        }
+      },
+      400: {
+        description: "Bad request",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      401: {
+        description: "Unauthorized",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      403: {
+        description: "Forbidden",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      409: {
+        description: "Conflict",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      }
+    }
+  });
+
+  app.openapi(learnersProvisionRoute, async (c) => {
+    const { tenantId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const auth = await authorizeRequest(c, tenantId, ["ADMIN"]);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.provisionLearnerForTenant({
+      tenantId,
+      email: body.email,
+      displayName: body.displayName
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    const learner = result.learner;
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LEARNERS_PROVISION,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { learnerUserId: learner.id, email: learner.email }
+    });
+    return c.json(
+      {
+        data: {
+          learner: {
+            id: learner.id,
+            email: learner.email,
+            displayName: learner.displayName,
+            createdAt: learner.createdAt.toISOString(),
+            updatedAt: learner.updatedAt.toISOString()
+          }
+        }
+      },
+      200
+    );
+  });
+
+  const staffCategoryRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+
+  const listCourseCategoriesRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/course-categories`,
+    tags: [lmsApiTags.categories],
+    request: { params: tenantParams },
+    responses: {
+      200: {
+        description: "Course categories",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ categories: z.array(courseCategoryDtoSchema) }))
+          }
+        }
+      },
+      401: { description: "Unauthorized", content: { "application/json": { schema: apiErrorBodySchema } } },
+      403: { description: "Forbidden", content: { "application/json": { schema: apiErrorBodySchema } } }
+    }
+  });
+
+  app.openapi(listCourseCategoriesRoute, async (c) => {
+    const { tenantId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId, staffCategoryRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const categories = await resolvedDependencies.dataAccess.listCourseCategoriesForTenant(tenantId);
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.CATEGORIES_DIRECTORY_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { resultCount: categories.length }
+    });
+    return c.json({ data: { categories } }, 200);
+  });
+
+  const createCourseCategoryRoute = createRoute({
+    method: "post",
+    path: `${base}/tenants/{tenantId}/course-categories`,
+    tags: [lmsApiTags.categories],
+    request: {
+      params: tenantParams,
+      body: { content: { "application/json": { schema: courseCategoryCreateBodySchema } } }
+    },
+    responses: {
+      201: {
+        description: "Created",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ category: courseCategoryDtoSchema }))
+          }
+        }
+      },
+      400: { description: "Bad request", content: { "application/json": { schema: apiErrorBodySchema } } },
+      401: { description: "Unauthorized", content: { "application/json": { schema: apiErrorBodySchema } } },
+      403: { description: "Forbidden", content: { "application/json": { schema: apiErrorBodySchema } } }
+    }
+  });
+
+  app.openapi(createCourseCategoryRoute, async (c) => {
+    const { tenantId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const auth = await authorizeRequest(c, tenantId, staffCategoryRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.createCourseCategory({
+      tenantId,
+      name: body.name,
+      parentId: body.parentId,
+      sortOrder: body.sortOrder
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.CATEGORY_WRITE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { categoryId: result.category.id, operation: "create" }
+    });
+    return c.json({ data: { category: result.category } }, 201);
+  });
+
+  const patchCourseCategoryRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/course-categories/{categoryId}`,
+    tags: [lmsApiTags.categories],
+    request: {
+      params: tenantCategoryParams,
+      body: { content: { "application/json": { schema: courseCategoryPatchBodySchema } } }
+    },
+    responses: {
+      200: {
+        description: "Updated",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ category: courseCategoryDtoSchema }))
+          }
+        }
+      },
+      400: { description: "Bad request", content: { "application/json": { schema: apiErrorBodySchema } } },
+      401: { description: "Unauthorized", content: { "application/json": { schema: apiErrorBodySchema } } },
+      403: { description: "Forbidden", content: { "application/json": { schema: apiErrorBodySchema } } },
+      404: { description: "Not found", content: { "application/json": { schema: apiErrorBodySchema } } }
+    }
+  });
+
+  app.openapi(patchCourseCategoryRoute, async (c) => {
+    const { tenantId, categoryId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const auth = await authorizeRequest(c, tenantId, staffCategoryRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    if (body.name === undefined && body.parentId === undefined && body.sortOrder === undefined) {
+      return c.json({ error: "No fields to update" }, 400) as never;
+    }
+    const result = await resolvedDependencies.dataAccess.updateCourseCategory({
+      tenantId,
+      categoryId,
+      name: body.name,
+      parentId: body.parentId,
+      sortOrder: body.sortOrder
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.CATEGORY_WRITE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { categoryId, operation: "update" }
+    });
+    return c.json({ data: { category: result.category } }, 200);
+  });
+
+  const deleteCourseCategoryRoute = createRoute({
+    method: "delete",
+    path: `${base}/tenants/{tenantId}/course-categories/{categoryId}`,
+    tags: [lmsApiTags.categories],
+    request: { params: tenantCategoryParams },
+    responses: {
+      200: {
+        description: "Archived",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ archived: z.literal(true) }))
+          }
+        }
+      },
+      401: { description: "Unauthorized", content: { "application/json": { schema: apiErrorBodySchema } } },
+      403: { description: "Forbidden", content: { "application/json": { schema: apiErrorBodySchema } } },
+      404: { description: "Not found", content: { "application/json": { schema: apiErrorBodySchema } } },
+      409: { description: "Conflict", content: { "application/json": { schema: apiErrorBodySchema } } }
+    }
+  });
+
+  app.openapi(deleteCourseCategoryRoute, async (c) => {
+    const { tenantId, categoryId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId, staffCategoryRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.archiveCourseCategory({ tenantId, categoryId });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.CATEGORY_WRITE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { categoryId, operation: "archive" }
+    });
+    return c.json({ data: { archived: true as const } }, 200);
+  });
+
+  const listCoursesInCategoryRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/course-categories/{categoryId}/courses`,
+    tags: [lmsApiTags.categories],
+    request: { params: tenantCategoryParams },
+    responses: {
+      200: {
+        description: "Courses linked to this category",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ courses: z.array(courseDtoSchema) }))
+          }
+        }
+      },
+      401: { description: "Unauthorized", content: { "application/json": { schema: apiErrorBodySchema } } },
+      403: { description: "Forbidden", content: { "application/json": { schema: apiErrorBodySchema } } },
+      404: { description: "Not found", content: { "application/json": { schema: apiErrorBodySchema } } }
+    }
+  });
+
+  app.openapi(listCoursesInCategoryRoute, async (c) => {
+    const { tenantId, categoryId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId, staffCategoryRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.listCoursesInCategory({ tenantId, categoryId });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    return c.json({ data: { courses: result.courses } }, 200);
+  });
+
+  const putCourseCategoriesRoute = createRoute({
+    method: "put",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/categories`,
+    tags: [lmsApiTags.categories],
+    request: {
+      params: tenantCourseParams,
+      body: { content: { "application/json": { schema: courseCategoriesPutBodySchema } } }
+    },
+    responses: {
+      200: {
+        description: "Updated course category links",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ course: courseDtoSchema }))
+          }
+        }
+      },
+      400: { description: "Bad request", content: { "application/json": { schema: apiErrorBodySchema } } },
+      401: { description: "Unauthorized", content: { "application/json": { schema: apiErrorBodySchema } } },
+      403: { description: "Forbidden", content: { "application/json": { schema: apiErrorBodySchema } } },
+      404: { description: "Not found", content: { "application/json": { schema: apiErrorBodySchema } } }
+    }
+  });
+
+  app.openapi(putCourseCategoriesRoute, async (c) => {
+    const { tenantId, courseId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const auth = await authorizeRequest(c, tenantId, staffCategoryRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.setCourseCategoryLinks({
+      tenantId,
+      courseId,
+      categoryIds: body.categoryIds
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.COURSE_CATEGORY_LINKS_WRITE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId }
+    });
+    return c.json({ data: { course: result.course } }, 200);
+  });
+
+  const deleteCourseCategoryLinkRoute = createRoute({
+    method: "delete",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/categories/{categoryId}`,
+    tags: [lmsApiTags.categories],
+    request: { params: tenantCourseCategoryParams },
+    responses: {
+      200: {
+        description: "Removed",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ removed: z.literal(true) }))
+          }
+        }
+      },
+      401: { description: "Unauthorized", content: { "application/json": { schema: apiErrorBodySchema } } },
+      403: { description: "Forbidden", content: { "application/json": { schema: apiErrorBodySchema } } },
+      404: { description: "Not found", content: { "application/json": { schema: apiErrorBodySchema } } }
+    }
+  });
+
+  app.openapi(deleteCourseCategoryLinkRoute, async (c) => {
+    const { tenantId, courseId, categoryId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId, staffCategoryRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.removeCourseFromCategory({
+      tenantId,
+      courseId,
+      categoryId
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.COURSE_CATEGORY_LINKS_WRITE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, categoryId, operation: "disconnect" }
+    });
+    return c.json({ data: { removed: true as const } }, 200);
   });
 
   app.doc("/doc", {

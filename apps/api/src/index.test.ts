@@ -123,7 +123,8 @@ describe("domain list endpoints", () => {
               description: null,
               publishedAt: null,
               createdAt: new Date("2024-01-01T00:00:00.000Z"),
-              updatedAt: new Date("2024-01-02T00:00:00.000Z")
+              updatedAt: new Date("2024-01-02T00:00:00.000Z"),
+              categoryIds: []
             }
           ];
         },
@@ -180,6 +181,78 @@ describe("domain list endpoints", () => {
     };
     expect(body.data.learners).toHaveLength(1);
     expect(body.data.learners[0]?.email).toBe("a@example.com");
+  });
+
+  it("denies course category directory for learner role", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async listCourseCategoriesForTenant() {
+          throw new Error("listCourseCategoriesForTenant should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/course-categories`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("returns course categories for instructor when data access is mocked", async () => {
+    const iso = "2024-01-01T00:00:00.000Z";
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async listCourseCategoriesForTenant(tenantId: string) {
+          expect(tenantId).toBe(tenantA);
+          return [
+            {
+              id: "cat-1",
+              tenantId,
+              parentId: null,
+              name: "Root",
+              sortOrder: 0,
+              directCourseCount: 0,
+              createdAt: iso,
+              updatedAt: iso
+            }
+          ];
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/course-categories`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { categories: { id: string; name: string }[] };
+    };
+    expect(body.data.categories).toHaveLength(1);
+    expect(body.data.categories[0]?.name).toBe("Root");
   });
 
   it("denies learners list for users without instructor or admin role", async () => {
@@ -239,7 +312,8 @@ describe("domain list endpoints", () => {
               description: null,
               publishedAt: "2024-01-01T00:00:00.000Z",
               createdAt: "2024-01-01T00:00:00.000Z",
-              updatedAt: "2024-01-01T00:00:00.000Z"
+              updatedAt: "2024-01-01T00:00:00.000Z",
+              categoryIds: []
             }
           ];
         },
@@ -336,7 +410,8 @@ describe("domain list endpoints", () => {
               description: null,
               publishedAt: iso,
               createdAt: iso,
-              updatedAt: iso
+              updatedAt: iso,
+              categoryIds: []
             }
           };
         },
