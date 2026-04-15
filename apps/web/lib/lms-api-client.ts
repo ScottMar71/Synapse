@@ -1,6 +1,11 @@
 import type {
+  CourseCategoriesPutBody,
+  CourseCategoryCreateBody,
+  CourseCategoryDto,
+  CourseCategoryPatchBody,
   CourseDto,
   EnrollmentDto,
+  LearnerProvisionBody,
   ProgressDto,
   ProgressPutBody,
   SubmissionDto
@@ -188,4 +193,134 @@ export async function probeInstructorRoute(session: LmsApiSession): Promise<bool
     headers: authHeaders(session)
   });
   return response.ok;
+}
+
+export async function probeAdminRoute(session: LmsApiSession): Promise<boolean> {
+  const response = await fetch(`/api/v1/tenants/${encodeURIComponent(session.tenantId)}/admin`, {
+    headers: authHeaders(session)
+  });
+  return response.ok;
+}
+
+export async function postProvisionLearner(
+  session: LmsApiSession,
+  body: LearnerProvisionBody
+): Promise<{ ok: true; learner: LearnerSummary } | { ok: false; error: ApiError }> {
+  const response = await fetch(`/api/v1/tenants/${encodeURIComponent(session.tenantId)}/learners`, {
+    method: "POST",
+    headers: authHeaders(session, true),
+    body: JSON.stringify(body)
+  });
+  const parsed = await parseResponse<DataEnvelope<{ learner: LearnerSummary }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, learner: parsed.data.data.learner };
+}
+
+export async function fetchCourseCategories(
+  session: LmsApiSession
+): Promise<{ ok: true; categories: CourseCategoryDto[] } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/course-categories`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ categories: CourseCategoryDto[] }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, categories: parsed.data.data.categories };
+}
+
+export async function postCourseCategory(
+  session: LmsApiSession,
+  body: CourseCategoryCreateBody
+): Promise<{ ok: true; category: CourseCategoryDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/course-categories`,
+    { method: "POST", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ category: CourseCategoryDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, category: parsed.data.data.category };
+}
+
+export async function patchCourseCategory(
+  session: LmsApiSession,
+  categoryId: string,
+  body: CourseCategoryPatchBody
+): Promise<{ ok: true; category: CourseCategoryDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/course-categories/${encodeURIComponent(categoryId)}`,
+    { method: "PATCH", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ category: CourseCategoryDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, category: parsed.data.data.category };
+}
+
+export async function deleteCourseCategory(
+  session: LmsApiSession,
+  categoryId: string
+): Promise<{ ok: true } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/course-categories/${encodeURIComponent(categoryId)}`,
+    { method: "DELETE", headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ archived: true }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true };
+}
+
+export async function fetchCoursesInCategory(
+  session: LmsApiSession,
+  categoryId: string
+): Promise<{ ok: true; courses: CourseDto[] } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/course-categories/${encodeURIComponent(categoryId)}/courses`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ courses: CourseDto[] }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, courses: parsed.data.data.courses };
+}
+
+export async function putCourseCategories(
+  session: LmsApiSession,
+  courseId: string,
+  body: CourseCategoriesPutBody
+): Promise<{ ok: true; course: CourseDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/categories`,
+    { method: "PUT", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ course: CourseDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, course: parsed.data.data.course };
+}
+
+export async function deleteCourseFromCategory(
+  session: LmsApiSession,
+  courseId: string,
+  categoryId: string
+): Promise<{ ok: true } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/categories/${encodeURIComponent(categoryId)}`,
+    { method: "DELETE", headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ removed: true }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true };
 }

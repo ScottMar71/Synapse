@@ -44,6 +44,17 @@ export default function HomePage(): ReactElement {
               Open admin course page →
             </Link>
             <Link
+              href="/admin/learners"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Learners directory (admin) →
+            </Link>
+            <Link
               href="/admin/learners-wireframe"
               style={{
                 display: "inline-flex",
@@ -53,6 +64,17 @@ export default function HomePage(): ReactElement {
               }}
             >
               Learners list wireframe →
+            </Link>
+            <Link
+              href="/admin/categories"
+              style={{
+                display: "inline-flex",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textDecoration: "none"
+              }}
+            >
+              Course categories (admin) →
             </Link>
             <Link
               href="/admin/categories-wireframe"

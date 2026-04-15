@@ -10,6 +10,7 @@ const isoDateTime = z.string().datetime({ offset: true });
 
 export const lmsApiTags = {
   catalog: "Course catalog",
+  categories: "Course categories",
   enrollments: "Enrollments",
   progress: "Progress",
   assessments: "Assessments"
@@ -28,9 +29,45 @@ export const courseDtoSchema = z
     description: z.string().nullable(),
     publishedAt: isoDateTime.nullable(),
     createdAt: isoDateTime,
-    updatedAt: isoDateTime
+    updatedAt: isoDateTime,
+    categoryIds: z.array(z.string())
   })
   .openapi("Course");
+
+export const courseCategoryDtoSchema = z
+  .object({
+    id: z.string(),
+    tenantId: z.string(),
+    parentId: z.string().nullable(),
+    name: z.string(),
+    sortOrder: z.number().int(),
+    directCourseCount: z.number().int(),
+    createdAt: isoDateTime,
+    updatedAt: isoDateTime
+  })
+  .openapi("CourseCategory");
+
+export const courseCategoryCreateBodySchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    parentId: z.string().min(1).nullable().optional(),
+    sortOrder: z.number().int().optional()
+  })
+  .openapi("CourseCategoryCreateBody");
+
+export const courseCategoryPatchBodySchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    parentId: z.string().min(1).nullable().optional(),
+    sortOrder: z.number().int().optional()
+  })
+  .openapi("CourseCategoryPatchBody");
+
+export const courseCategoriesPutBodySchema = z
+  .object({
+    categoryIds: z.array(z.string().min(1))
+  })
+  .openapi("CourseCategoriesPutBody");
 
 export const enrollmentDtoSchema = z
   .object({
@@ -94,6 +131,23 @@ export const progressPutBodySchema = z
   })
   .openapi("ProgressPutBody");
 
+export const learnerSummarySchema = z
+  .object({
+    id: z.string(),
+    email: z.string(),
+    displayName: z.string(),
+    createdAt: isoDateTime,
+    updatedAt: isoDateTime
+  })
+  .openapi("LearnerSummary");
+
+export const learnerProvisionBodySchema = z
+  .object({
+    email: z.string().min(1).email(),
+    displayName: z.string().min(1).max(200).optional()
+  })
+  .openapi("LearnerProvisionBody");
+
 export const apiErrorBodySchema = z
   .object({
     error: z.string()
@@ -101,8 +155,14 @@ export const apiErrorBodySchema = z
   .openapi("ApiError");
 
 export type CourseDto = z.infer<typeof courseDtoSchema>;
+export type CourseCategoryDto = z.infer<typeof courseCategoryDtoSchema>;
+export type CourseCategoryCreateBody = z.infer<typeof courseCategoryCreateBodySchema>;
+export type CourseCategoryPatchBody = z.infer<typeof courseCategoryPatchBodySchema>;
+export type CourseCategoriesPutBody = z.infer<typeof courseCategoriesPutBodySchema>;
 export type EnrollmentDto = z.infer<typeof enrollmentDtoSchema>;
 export type ProgressDto = z.infer<typeof progressDtoSchema>;
 export type SubmissionDto = z.infer<typeof submissionDtoSchema>;
 export type EnrollmentCreateBody = z.infer<typeof enrollmentCreateBodySchema>;
 export type ProgressPutBody = z.infer<typeof progressPutBodySchema>;
+export type LearnerSummaryDto = z.infer<typeof learnerSummarySchema>;
+export type LearnerProvisionBody = z.infer<typeof learnerProvisionBodySchema>;
