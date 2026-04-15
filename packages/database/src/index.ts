@@ -9,7 +9,9 @@ export type CourseListItem = {
   code: string;
   title: string;
   description: string | null;
+  objectives: string | null;
   publishedAt: Date | null;
+  archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   categoryIds: string[];
@@ -51,7 +53,9 @@ export async function listCoursesForTenant(tenantId: string): Promise<CourseList
       code: true,
       title: true,
       description: true,
+      objectives: true,
       publishedAt: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
       categories: {
@@ -67,7 +71,9 @@ export async function listCoursesForTenant(tenantId: string): Promise<CourseList
     code: row.code,
     title: row.title,
     description: row.description,
+    objectives: row.objectives,
     publishedAt: row.publishedAt,
+    archivedAt: row.archivedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     categoryIds: row.categories.map((c) => c.id)

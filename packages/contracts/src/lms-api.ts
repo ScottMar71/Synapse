@@ -27,12 +27,24 @@ export const courseDtoSchema = z
     code: z.string(),
     title: z.string(),
     description: z.string().nullable(),
+    objectives: z.string().nullable(),
     publishedAt: isoDateTime.nullable(),
+    archivedAt: isoDateTime.nullable(),
     createdAt: isoDateTime,
     updatedAt: isoDateTime,
     categoryIds: z.array(z.string())
   })
   .openapi("Course");
+
+export const coursePatchBodySchema = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    description: z.string().max(50000).nullable().optional(),
+    objectives: z.string().max(50000).nullable().optional(),
+    publishedAt: isoDateTime.nullable().optional(),
+    archived: z.boolean().optional()
+  })
+  .openapi("CoursePatchBody");
 
 export const courseCategoryDtoSchema = z
   .object({
@@ -155,6 +167,7 @@ export const apiErrorBodySchema = z
   .openapi("ApiError");
 
 export type CourseDto = z.infer<typeof courseDtoSchema>;
+export type CoursePatchBody = z.infer<typeof coursePatchBodySchema>;
 export type CourseCategoryDto = z.infer<typeof courseCategoryDtoSchema>;
 export type CourseCategoryCreateBody = z.infer<typeof courseCategoryCreateBodySchema>;
 export type CourseCategoryPatchBody = z.infer<typeof courseCategoryPatchBodySchema>;

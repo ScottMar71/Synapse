@@ -121,7 +121,9 @@ describe("domain list endpoints", () => {
               code: "CRS-1",
               title: "Intro",
               description: null,
+              objectives: null,
               publishedAt: null,
+              archivedAt: null,
               createdAt: new Date("2024-01-01T00:00:00.000Z"),
               updatedAt: new Date("2024-01-02T00:00:00.000Z"),
               categoryIds: []
@@ -143,6 +145,52 @@ describe("domain list endpoints", () => {
     };
     expect(body.data.courses).toHaveLength(1);
     expect(body.data.courses[0]?.title).toBe("Intro");
+  });
+
+  it("patches course when instructor and data access is mocked", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async updateCourse() {
+          return {
+            ok: true,
+            course: {
+              id: "course-1",
+              tenantId: tenantA,
+              code: "CRS-1",
+              title: "Updated",
+              description: null,
+              objectives: null,
+              publishedAt: null,
+              archivedAt: null,
+              createdAt: "2024-01-01T00:00:00.000Z",
+              updatedAt: "2024-01-02T00:00:00.000Z",
+              categoryIds: []
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/courses/course-1`, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ title: "Updated" })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { course: { title: string } } };
+    expect(body.data.course.title).toBe("Updated");
   });
 
   it("returns learners for admin when data access is mocked", async () => {
@@ -310,7 +358,9 @@ describe("domain list endpoints", () => {
               code: "P",
               title: "Public",
               description: null,
+              objectives: null,
               publishedAt: "2024-01-01T00:00:00.000Z",
+              archivedAt: null,
               createdAt: "2024-01-01T00:00:00.000Z",
               updatedAt: "2024-01-01T00:00:00.000Z",
               categoryIds: []
@@ -408,7 +458,9 @@ describe("domain list endpoints", () => {
               code: "C",
               title: "Course",
               description: null,
+              objectives: null,
               publishedAt: iso,
+              archivedAt: null,
               createdAt: iso,
               updatedAt: iso,
               categoryIds: []
