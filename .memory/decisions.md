@@ -48,3 +48,17 @@
 - Context: The deliverable requires moving `apps/api` across hosts without rewriting domain code; background work and queues must not leak SDKs into routes.
 - Decision: Extend **`PlatformAdapters`** with **`jobs`** (`enqueueJob`) alongside auth, storage, email, and queue; add **`mergePlatformAdapters`** for composition. Document the split in **`infra/portability/hosting-split-playbook.md`**. Prove interchangeability with **Vitest smoke** tests comparing two adapter construction styles to identical HTTP responses.
 - Status: Active
+
+### 008 - API metrics endpoint without app auth
+
+- Date: 2026-04-15
+- Context: Operators need scrape-friendly metrics for SLOs; adding bearer auth complicates probes and synthetic checks.
+- Decision: Expose `GET /internal/metrics` without user authentication; rely on **network policy** (private network, allowlist, or platform-only access) in production. Documented in `infra/observability/README.md`.
+- Status: Active
+
+### 009 - API observability via stdout and in-process metrics
+
+- Date: 2026-04-15
+- Context: GDPR-ready LMS needs correlation IDs, structured logs, audit trails for sensitive API actions, and baseline SLO signals without mandating a specific APM vendor.
+- Decision: Implement `AsyncLocalStorage` for `requestId`, JSON request lines to stdout, `type: "audit"` lines after successful sensitive LMS operations, `GET /health` and `GET /internal/metrics` on the Hono app, and Next.js middleware that forwards or generates `x-request-id`. Document SLO/alert placeholders under `infra/observability/`.
+- Status: Active
