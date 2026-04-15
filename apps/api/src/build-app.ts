@@ -7,6 +7,7 @@ import {
   courseCategoryDtoSchema,
   courseCategoryPatchBodySchema,
   courseDtoSchema,
+  coursePatchBodySchema,
   enrollmentCreateBodySchema,
   enrollmentDtoSchema,
   learnerProvisionBodySchema,
@@ -34,6 +35,7 @@ import {
   removeCourseFromCategory,
   setCourseCategoryLinks,
   submitAssessmentAttempt,
+  updateCourse,
   updateCourseCategory,
   upsertProgressForUser,
   upsertSubmissionDraft,
@@ -78,6 +80,7 @@ type DataAccess = {
   listCoursesInCategory: typeof listCoursesInCategory;
   setCourseCategoryLinks: typeof setCourseCategoryLinks;
   removeCourseFromCategory: typeof removeCourseFromCategory;
+  updateCourse: typeof updateCourse;
 };
 
 type AppDependencies = {
@@ -136,6 +139,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     listCoursesInCategory,
     setCourseCategoryLinks,
     removeCourseFromCategory,
+    updateCourse,
     ...dependencies.dataAccess
   };
 
@@ -295,7 +299,9 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
         code: row.code,
         title: row.title,
         description: row.description,
+        objectives: row.objectives,
         publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
+        archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
         categoryIds: row.categoryIds
@@ -351,6 +357,75 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       const mapped = mapServiceError(result.error);
       return c.json({ error: mapped.message }, mapped.status) as never;
     }
+    return c.json({ data: { course: result.course } }, 200);
+  });
+
+  const patchCourseRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}`,
+    tags: [lmsApiTags.catalog],
+    request: {
+      params: tenantCourseParams,
+      body: { content: { "application/json": { schema: coursePatchBodySchema } } }
+    },
+    responses: {
+      200: {
+        description: "Updated course",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ course: courseDtoSchema }))
+          }
+        }
+      },
+      400: {
+        description: "Bad request",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      401: {
+        description: "Unauthorized",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      403: {
+        description: "Forbidden",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      404: {
+        description: "Not found",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      }
+    }
+  });
+
+  app.openapi(patchCourseRoute, async (c) => {
+    const { tenantId, courseId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.updateCourse({
+      tenantId,
+      courseId,
+      roles: auth.roles,
+      patch: {
+        title: body.title,
+        description: body.description,
+        objectives: body.objectives,
+        publishedAt: body.publishedAt,
+        archived: body.archived
+      }
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.COURSE_UPDATE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId }
+    });
     return c.json({ data: { course: result.course } }, 200);
   });
 

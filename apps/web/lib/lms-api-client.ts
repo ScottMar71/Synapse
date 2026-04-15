@@ -4,6 +4,7 @@ import type {
   CourseCategoryDto,
   CourseCategoryPatchBody,
   CourseDto,
+  CoursePatchBody,
   EnrollmentDto,
   LearnerProvisionBody,
   ProgressDto,
@@ -66,6 +67,22 @@ export async function fetchCourse(
   const response = await fetch(
     `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}`,
     { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ course: CourseDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, course: parsed.data.data.course };
+}
+
+export async function patchCourse(
+  session: LmsApiSession,
+  courseId: string,
+  body: CoursePatchBody
+): Promise<{ ok: true; course: CourseDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}`,
+    { method: "PATCH", headers: authHeaders(session, true), body: JSON.stringify(body) }
   );
   const parsed = await parseResponse<DataEnvelope<{ course: CourseDto }>>(response);
   if (!parsed.ok) {

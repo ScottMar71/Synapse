@@ -13,7 +13,9 @@ export type CourseDto = {
   code: string;
   title: string;
   description: string | null;
+  objectives: string | null;
   publishedAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
   categoryIds: string[];
@@ -72,7 +74,9 @@ function mapCourse(course: {
   code: string;
   title: string;
   description: string | null;
+  objectives: string | null;
   publishedAt: Date | null;
+  archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   categories?: { id: string }[];
@@ -83,7 +87,9 @@ function mapCourse(course: {
     code: course.code,
     title: course.title,
     description: course.description,
+    objectives: course.objectives,
     publishedAt: course.publishedAt ? course.publishedAt.toISOString() : null,
+    archivedAt: course.archivedAt ? course.archivedAt.toISOString() : null,
     createdAt: course.createdAt.toISOString(),
     updatedAt: course.updatedAt.toISOString(),
     categoryIds: course.categories ? course.categories.map((c) => c.id) : []
@@ -176,7 +182,9 @@ export async function listPublishedCoursesForTenant(tenantId: string): Promise<C
       code: true,
       title: true,
       description: true,
+      objectives: true,
       publishedAt: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
       categories: {
@@ -195,15 +203,22 @@ export async function getCourseForViewer(input: {
   viewerUserId: string;
   roles: MembershipRoleName[];
 }): Promise<{ ok: true; course: CourseDto } | { ok: false; error: ServiceError }> {
+  const isStaff = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
   const course = await prisma.course.findFirst({
-    where: { id: input.courseId, tenantId: input.tenantId, archivedAt: null },
+    where: {
+      id: input.courseId,
+      tenantId: input.tenantId,
+      ...(!isStaff ? { archivedAt: null } : {})
+    },
     select: {
       id: true,
       tenantId: true,
       code: true,
       title: true,
       description: true,
+      objectives: true,
       publishedAt: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
       categories: {
@@ -217,8 +232,6 @@ export async function getCourseForViewer(input: {
   if (!course) {
     return { ok: false, error: { code: "NOT_FOUND", message: "Course not found" } };
   }
-
-  const isStaff = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
   if (isStaff) {
     return { ok: true, course: mapCourse(course) };
   }
@@ -243,6 +256,94 @@ export async function getCourseForViewer(input: {
   }
 
   return { ok: false, error: { code: "FORBIDDEN", message: "Course not available" } };
+}
+
+export async function updateCourse(input: {
+  tenantId: string;
+  courseId: string;
+  roles: MembershipRoleName[];
+  patch: {
+    title?: string;
+    description?: string | null;
+    objectives?: string | null;
+    publishedAt?: string | null;
+    archived?: boolean;
+  };
+}): Promise<{ ok: true; course: CourseDto } | { ok: false; error: ServiceError }> {
+  const staff = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!staff) {
+    return { ok: false, error: { code: "FORBIDDEN", message: "Course updates require staff access" } };
+  }
+
+  const fullSelect = {
+    id: true,
+    tenantId: true,
+    code: true,
+    title: true,
+    description: true,
+    objectives: true,
+    publishedAt: true,
+    archivedAt: true,
+    createdAt: true,
+    updatedAt: true,
+    categories: {
+      where: { archivedAt: null },
+      select: { id: true },
+      orderBy: { sortOrder: "asc" as const }
+    }
+  } as const;
+
+  const data: {
+    title?: string;
+    description?: string | null;
+    objectives?: string | null;
+    publishedAt?: Date | null;
+    archivedAt?: Date | null;
+  } = {};
+
+  if (input.patch.title !== undefined) {
+    data.title = input.patch.title;
+  }
+  if (input.patch.description !== undefined) {
+    data.description = input.patch.description;
+  }
+  if (input.patch.objectives !== undefined) {
+    data.objectives = input.patch.objectives;
+  }
+  if (input.patch.publishedAt !== undefined) {
+    data.publishedAt = input.patch.publishedAt === null ? null : new Date(input.patch.publishedAt);
+  }
+  if (input.patch.archived !== undefined) {
+    data.archivedAt = input.patch.archived ? new Date() : null;
+  }
+
+  if (Object.keys(data).length === 0) {
+    const row = await prisma.course.findFirst({
+      where: { id: input.courseId, tenantId: input.tenantId },
+      select: fullSelect
+    });
+    if (!row) {
+      return { ok: false, error: { code: "NOT_FOUND", message: "Course not found" } };
+    }
+    return { ok: true, course: mapCourse(row) };
+  }
+
+  const existing = await prisma.course.findFirst({
+    where: { id: input.courseId, tenantId: input.tenantId },
+    select: { id: true }
+  });
+
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Course not found" } };
+  }
+
+  const updated = await prisma.course.update({
+    where: { id: input.courseId },
+    data,
+    select: fullSelect
+  });
+
+  return { ok: true, course: mapCourse(updated) };
 }
 
 export async function createEnrollment(input: {
@@ -864,7 +965,9 @@ export async function listCoursesInCategory(input: {
       code: true,
       title: true,
       description: true,
+      objectives: true,
       publishedAt: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
       categories: {
@@ -884,7 +987,7 @@ export async function setCourseCategoryLinks(input: {
   categoryIds: string[];
 }): Promise<{ ok: true; course: CourseDto } | { ok: false; error: ServiceError }> {
   const course = await prisma.course.findFirst({
-    where: { id: input.courseId, tenantId: input.tenantId, archivedAt: null },
+    where: { id: input.courseId, tenantId: input.tenantId },
     select: { id: true }
   });
 
@@ -913,7 +1016,9 @@ export async function setCourseCategoryLinks(input: {
       code: true,
       title: true,
       description: true,
+      objectives: true,
       publishedAt: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
       categories: {
@@ -942,7 +1047,7 @@ export async function removeCourseFromCategory(input: {
   }
 
   const course = await prisma.course.findFirst({
-    where: { id: input.courseId, tenantId: input.tenantId, archivedAt: null },
+    where: { id: input.courseId, tenantId: input.tenantId },
     select: { id: true }
   });
 
