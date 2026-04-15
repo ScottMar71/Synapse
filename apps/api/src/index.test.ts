@@ -1,35 +1,21 @@
 import { describe, expect, it } from "vitest";
 
+import type { AuthAdapter } from "@conductor/platform";
+import { createNoopPlatformAdapters, mergePlatformAdapters } from "@conductor/platform";
+
 import { buildApp } from "./index";
 
 const tenantA = "tenant-a";
 const tenantB = "tenant-b";
 
+function adaptersWithAuth(auth: AuthAdapter) {
+  return mergePlatformAdapters(createNoopPlatformAdapters(), { auth });
+}
+
 describe("API auth tenant RBAC guards", () => {
   it("denies unauthenticated requests", async () => {
     const app = buildApp({
-      adapters: {
-        auth: {
-          async validateToken() {
-            return null;
-          }
-        },
-        email: {
-          async sendEmail() {
-            return;
-          }
-        },
-        queue: {
-          async enqueue() {
-            return;
-          }
-        },
-        storage: {
-          async putObject() {
-            return;
-          }
-        }
-      },
+      adapters: createNoopPlatformAdapters(),
       membershipStore: {
         async getRolesForUser() {
           return [];
@@ -43,28 +29,11 @@ describe("API auth tenant RBAC guards", () => {
 
   it("denies authenticated users missing required role", async () => {
     const app = buildApp({
-      adapters: {
-        auth: {
-          async validateToken() {
-            return { userId: "user-1", tenantId: tenantA };
-          }
-        },
-        email: {
-          async sendEmail() {
-            return;
-          }
-        },
-        queue: {
-          async enqueue() {
-            return;
-          }
-        },
-        storage: {
-          async putObject() {
-            return;
-          }
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
         }
-      },
+      }),
       membershipStore: {
         async getRolesForUser() {
           return ["LEARNER"];
@@ -82,28 +51,11 @@ describe("API auth tenant RBAC guards", () => {
 
   it("denies cross-tenant access attempts", async () => {
     const app = buildApp({
-      adapters: {
-        auth: {
-          async validateToken() {
-            return { userId: "user-1", tenantId: tenantA };
-          }
-        },
-        email: {
-          async sendEmail() {
-            return;
-          }
-        },
-        queue: {
-          async enqueue() {
-            return;
-          }
-        },
-        storage: {
-          async putObject() {
-            return;
-          }
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
         }
-      },
+      }),
       membershipStore: {
         async getRolesForUser() {
           return ["ADMIN"];
@@ -121,28 +73,11 @@ describe("API auth tenant RBAC guards", () => {
 
   it("allows valid tenant and role access", async () => {
     const app = buildApp({
-      adapters: {
-        auth: {
-          async validateToken() {
-            return { userId: "user-1", tenantId: tenantA };
-          }
-        },
-        email: {
-          async sendEmail() {
-            return;
-          }
-        },
-        queue: {
-          async enqueue() {
-            return;
-          }
-        },
-        storage: {
-          async putObject() {
-            return;
-          }
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
         }
-      },
+      }),
       membershipStore: {
         async getRolesForUser() {
           return ["ADMIN"];
@@ -160,28 +95,11 @@ describe("API auth tenant RBAC guards", () => {
 });
 
 function noopAdapters() {
-  return {
-    auth: {
-      async validateToken() {
-        return { userId: "user-1", tenantId: tenantA };
-      }
-    },
-    email: {
-      async sendEmail() {
-        return;
-      }
-    },
-    queue: {
-      async enqueue() {
-        return;
-      }
-    },
-    storage: {
-      async putObject() {
-        return;
-      }
+  return adaptersWithAuth({
+    async validateToken() {
+      return { userId: "user-1", tenantId: tenantA };
     }
-  };
+  });
 }
 
 describe("domain list endpoints", () => {

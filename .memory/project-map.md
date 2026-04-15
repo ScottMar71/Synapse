@@ -17,6 +17,13 @@
 - Workspace style: `monorepo`
 - Stack profile: `conductor-framework`
 
+## Infra
+
+- `infra/portability/hosting-split-playbook.md`: move `apps/api` off Vercel / alternate runtimes without domain rewrites; adapter boundaries.
+- `infra/deployment/`: Vercel (web + API monorepo) + Supabase EU runbooks, migration/rollback notes.
+- `infra/observability/`: SLO targets, error-budget policy sketch, alert routing placeholders, and API/web runbook stubs.
+- `.github/workflows/ci.yml`: install, typecheck, test, build on `main` and PRs.
+
 ## Apps / web
 
 - `apps/web/app/admin/categories-wireframe/`: admin wireframe for course categories (tree + detail + direct courses table).
