@@ -32,6 +32,7 @@
 - `apps/web/lib/lms-session.ts` + `lms-api-client.ts`: browser session cookies + typed fetch to `/api/v1` (proxied via `next.config.mjs` rewrites to `LMS_API_ORIGIN`).
 - `apps/web/app/admin/categories/`: production admin course categories (API-backed tree, CRUD, course links); uses session + `lms-api-client`. Wireframe remains at `apps/web/app/admin/categories-wireframe/`.
 - `apps/web/app/admin/courses/[courseId]/`: admin course editor — loads/saves course metadata (`PATCH /courses/:id`), category links (`PUT .../categories`), publish + archive toggles; client session via `lms-api-client`.
+- `apps/web/app/admin/learners/`: production learners directory (`GET .../learners`) and add flow (`POST .../learners`, admin-only); wireframe remains at `learners-wireframe/`.
 - `apps/web/app/admin/wireframe-course-category-presets.ts`: shared preset list for course editor “Course Categories” and the categories dashboard wireframe.
 
 ## Apps / api

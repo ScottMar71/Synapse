@@ -327,6 +327,76 @@ describe("domain list endpoints", () => {
     expect(response.status).toBe(403);
   });
 
+  it("denies learner provisioning for non-admin roles", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async provisionLearnerForTenant() {
+          throw new Error("provisionLearnerForTenant should not run for instructor");
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/learners`, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ email: "new@example.com" })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("provisions learner for admin when data access is mocked", async () => {
+    const iso = "2024-06-01T00:00:00.000Z";
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["ADMIN"];
+        }
+      },
+      dataAccess: {
+        async listCoursesForTenant() {
+          return [];
+        },
+        async listLearnersForTenant() {
+          return [];
+        },
+        async provisionLearnerForTenant() {
+          return {
+            ok: true,
+            learner: {
+              id: "learner-new",
+              email: "new@example.com",
+              displayName: "New Learner",
+              createdAt: new Date(iso),
+              updatedAt: new Date(iso)
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/learners`, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ email: "new@example.com", displayName: "New Learner" })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { learner: { email: string } } };
+    expect(body.data.learner.email).toBe("new@example.com");
+  });
+
   it("serves OpenAPI JSON at /doc", async () => {
     const app = buildApp();
     const response = await app.request("/doc");
