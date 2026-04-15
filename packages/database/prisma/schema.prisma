@@ -2,9 +2,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// DIRECT_URL: direct Postgres URL for migrations when DATABASE_URL uses a pooler (e.g. Supabase).
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum MembershipRole {
@@ -41,19 +43,20 @@ enum AuditAction {
 }
 
 model Tenant {
-  id          String       @id @default(cuid())
-  slug        String       @unique
-  name        String
-  description String?
-  archivedAt  DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  users       User[]
-  courses     Course[]
-  memberships Membership[]
-  enrollments Enrollment[]
-  assessments Assessment[]
-  auditEvents AuditEvent[]
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  name             String
+  description      String?
+  archivedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  users            User[]
+  courses          Course[]
+  courseCategories CourseCategory[]
+  memberships      Membership[]
+  enrollments      Enrollment[]
+  assessments      Assessment[]
+  auditEvents      AuditEvent[]
 
   @@map("tenants")
 }
@@ -99,16 +102,18 @@ model Membership {
 }
 
 model Course {
-  id            String        @id @default(cuid())
+  id            String           @id @default(cuid())
   tenantId      String
   code          String
   title         String
   description   String?
+  objectives    String?
   publishedAt   DateTime?
   archivedAt    DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categories    CourseCategory[]
   modules       Module[]
   enrollments   Enrollment[]
   assessments   Assessment[]
@@ -117,6 +122,25 @@ model Course {
   @@unique([tenantId, code])
   @@index([tenantId])
   @@map("courses")
+}
+
+model CourseCategory {
+  id         String           @id @default(cuid())
+  tenantId   String
+  parentId   String?
+  name       String
+  sortOrder  Int              @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent     CourseCategory?  @relation("CourseCategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children   CourseCategory[] @relation("CourseCategoryHierarchy")
+  courses    Course[]
+
+  @@index([tenantId])
+  @@index([tenantId, parentId])
+  @@map("course_categories")
 }
 
 model Module {

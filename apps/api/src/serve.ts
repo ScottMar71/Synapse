@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 
 import { createNoopPlatformAdapters } from "@conductor/platform";
 
-import { buildApp } from "./build-app.js";
+import { buildApp } from "./build-app";
 
 /**
  * Parses development-only bearer tokens: `dev|<tenantId>|<userId>`.

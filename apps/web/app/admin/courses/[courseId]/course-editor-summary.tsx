@@ -36,7 +36,7 @@ export function CourseEditorSummary({ value, onChange }: CourseEditorSummaryProp
         />
       </div>
       <p className={styles.summaryFootnote}>
-        Wireframe only — this text is not saved until the real editor API exists.
+        Internal author notes only — not shown to learners; persistence can be added later.
       </p>
     </section>
   );

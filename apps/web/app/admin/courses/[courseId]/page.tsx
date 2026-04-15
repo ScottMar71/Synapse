@@ -4,31 +4,12 @@ import Link from "next/link";
 import { CourseEditorWorkspace } from "./course-editor-workspace";
 import styles from "./course-wireframe.module.css";
 
-type AdminCourseWireframePageProps = {
+type AdminCoursePageProps = {
   params: Promise<{ courseId: string }>;
 };
 
-function safeDecodeURIComponent(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
-function titleFromCourseId(courseId: string): string {
-  const decoded = safeDecodeURIComponent(courseId);
-  if (decoded === "wireframe-demo") {
-    return "Onboarding essentials";
-  }
-  return decoded.replace(/-/g, " ");
-}
-
-export default async function AdminCourseWireframePage({
-  params
-}: AdminCourseWireframePageProps): Promise<ReactElement> {
+export default async function AdminCoursePage({ params }: AdminCoursePageProps): Promise<ReactElement> {
   const { courseId } = await params;
-  const title = titleFromCourseId(courseId);
 
   return (
     <main className="page-container">
@@ -39,27 +20,33 @@ export default async function AdminCourseWireframePage({
               <Link href="/">Home</Link>
             </li>
             <li>
-              <span>Admin</span>
+              <Link href="/admin/categories">Admin</Link>
             </li>
             <li>
               <span>Courses</span>
             </li>
-            <li aria-current="page">{title}</li>
+            <li aria-current="page">Course editor</li>
           </ol>
         </nav>
         <h1>
           Course editor
-          <span className={styles.wireTag}>Admin wireframe</span>
+          <span className={styles.wireTag}>Admin</span>
         </h1>
         <p style={{ margin: 0, color: "var(--color-text-muted)", maxWidth: "52ch" }}>
-          Layout for authors and tenant admins: course metadata, SCORM ingestion, document
-          and image uploads, Dickens for catalog copy, a duration estimate, and an author
-          course summary.
+          Course metadata, categories, and publish state are saved to the tenant API. Sign in with an instructor
+          or admin account to load and edit.
+        </p>
+        <p style={{ margin: "var(--space-3) 0 0", fontSize: "0.875rem" }}>
+          <Link href={`/admin/courses/${courseId}/player-wireframe`}>Open course player wireframe (preview)</Link>
+          <span style={{ color: "var(--color-text-muted)" }} aria-hidden>
+            {" "}
+            — learner-facing layout; sample outline only.
+          </span>
         </p>
       </header>
 
       <div className="page-content">
-        <CourseEditorWorkspace initialTitle={title} />
+        <CourseEditorWorkspace courseId={courseId} />
       </div>
     </main>
   );

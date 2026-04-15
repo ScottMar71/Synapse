@@ -33,7 +33,14 @@
 
 ## In Progress
 
-- Next deliverables remain pending (domain APIs, web core journeys, GDPR controls, deploy, and observability).
+- **Conductor**: Initiative *Synapse LMS v1 for external client enablement* is **`done`** (all v1 deliverables complete). Active initiative: **Admin UX & course authoring completion** (`in_progress`) with three todo deliverables: admin course categories, admin learners flows, and course editor persistence (blocked by categories). PRD: *LMS admin & course authoring (post-v1)*.
+
+## Deployment
+
+- Vercel-oriented config: `apps/web/vercel.json`, `apps/api/vercel.json`, root `build:vercel-web` / `build:vercel-api`, Hono Vercel handler at `apps/api/api/[[...route]].ts`.
+- Supabase-ready Prisma: `DIRECT_URL` + `DATABASE_URL` in schema; `.env.example` at repo root.
+- CI: GitHub Actions workflow for verify pipeline.
+- Portability: `packages/platform` includes **jobs** adapter and `mergePlatformAdapters`; `infra/portability/hosting-split-playbook.md` describes moving API off Vercel; smoke tests in `apps/api/src/platform-adapters.smoke.test.ts`.
 
 ## Known Issues
 

@@ -60,6 +60,9 @@ export function LmsInstructorShell({ children }: LmsInstructorShellProps): React
           <Link href="/instructor" style={{ fontWeight: 600, fontSize: "0.875rem" }}>
             Overview
           </Link>
+          <Link href="/instructor/reports" style={{ fontWeight: 600, fontSize: "0.875rem" }}>
+            Reports
+          </Link>
           <Link href="/" style={{ fontWeight: 600, fontSize: "0.875rem" }}>
             Home
           </Link>

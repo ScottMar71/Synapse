@@ -83,7 +83,7 @@ export default function LearnerCoursePage(): ReactElement {
     }
     setProgressMessage(`Saved progress at ${result.progress.percent}%.`);
     void load();
-  }, [courseId, percentInput]);
+  }, [courseId, percentInput, load]);
 
   const saveDraft = useCallback(async () => {
     const session = getSession();

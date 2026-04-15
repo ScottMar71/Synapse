@@ -34,3 +34,38 @@
 - Context: Accounts need a single human-facing sign-in handle that matches common LMS expectations and lines up with `User.email` (`@@unique([tenantId, email])`).
 - Decision: Treat **email** (scoped per tenant) as the login identifier for provisioning, admin UX, and sign-in copy. Keep **`User.id`** as the internal session/API subject after authentication; use **`User.externalId`** only for the identity provider’s stable subject when needed for linking, not as the primary login field.
 - Status: Active
+
+### 006 - Vercel two-project deploy with Supabase EU Postgres
+
+- Date: 2026-04-15
+- Context: Production needs repeatable deploys with EU data residency and a clear split between the Next.js app and the Hono API.
+- Decision: Use **two Vercel projects** (`apps/web` and `apps/api`) with root-level `npm ci` and dedicated `build:vercel-*` scripts; run the API on Vercel via `hono/vercel` (`apps/api/api/[[...route]].ts`). Use **Supabase in an EU region** with **pooled `DATABASE_URL`** and **`DIRECT_URL`** for Prisma migrations. Apply migrations with `prisma migrate deploy` using documented procedures rather than ad hoc SQL.
+- Status: Active
+
+### 007 - Platform adapters as the only vendor seam for API I/O
+
+- Date: 2026-04-15
+- Context: The deliverable requires moving `apps/api` across hosts without rewriting domain code; background work and queues must not leak SDKs into routes.
+- Decision: Extend **`PlatformAdapters`** with **`jobs`** (`enqueueJob`) alongside auth, storage, email, and queue; add **`mergePlatformAdapters`** for composition. Document the split in **`infra/portability/hosting-split-playbook.md`**. Prove interchangeability with **Vitest smoke** tests comparing two adapter construction styles to identical HTTP responses.
+- Status: Active
+
+### 008 - API metrics endpoint without app auth
+
+- Date: 2026-04-15
+- Context: Operators need scrape-friendly metrics for SLOs; adding bearer auth complicates probes and synthetic checks.
+- Decision: Expose `GET /internal/metrics` without user authentication; rely on **network policy** (private network, allowlist, or platform-only access) in production. Documented in `infra/observability/README.md`.
+- Status: Active
+
+### 010 - Close v1 initiative in Conductor; track admin work as a new initiative
+
+- Date: 2026-04-15
+- Context: All v1 LMS deliverables were complete while the initiative stage still read `tech_breakdown`; follow-on work is largely admin wireframes and course editor persistence rather than the original v1 bet.
+- Decision: Mark the **Synapse LMS v1** initiative **`done`**. Create a **new PRD and initiative** (*Admin UX & course authoring completion*) with one outcome and three deliverables (categories, learners, course editor persistence with dependency on categories). Score RICE and add baseline design notes on the outcome so the pipeline warnings clear.
+- Status: Active
+
+### 009 - API observability via stdout and in-process metrics
+
+- Date: 2026-04-15
+- Context: GDPR-ready LMS needs correlation IDs, structured logs, audit trails for sensitive API actions, and baseline SLO signals without mandating a specific APM vendor.
+- Decision: Implement `AsyncLocalStorage` for `requestId`, JSON request lines to stdout, `type: "audit"` lines after successful sensitive LMS operations, `GET /health` and `GET /internal/metrics` on the Hono app, and Next.js middleware that forwards or generates `x-request-id`. Document SLO/alert placeholders under `infra/observability/`.
+- Status: Active
