@@ -132,6 +132,7 @@ export default function HomePage(): ReactElement {
             required for these routes. Legacy <code>/admin/*-wireframe</code> URLs redirect here.
           </p>
           <div style={linkStack}>
+            <HubLink href="/admin">Admin dashboard →</HubLink>
             <HubLink href="/admin/categories">Course categories →</HubLink>
             <HubLink href="/admin/learners">Learners directory →</HubLink>
             <HubLink href="/admin/learners/add">Add learner →</HubLink>
@@ -215,7 +216,7 @@ export default function HomePage(): ReactElement {
               path={`/admin/courses/:courseId`}
               note="same as learner course — editor loads from API; use a real course id from your tenant when testing saves."
             />
-            <RouteLine path="/admin" note="no dedicated admin landing route yet; this hub at / is the navigation index." />
+            <RouteLine path="/admin" note="staff landing; links to learners, categories, reports, and sample course tools." />
             <RouteLine path="/protected" note="server redirect only — ends on /learn, not a standalone screen." />
             <RouteLine path="/login" note="removed from product; use /sign-in (some copy previously pointed here — updated to sign-in)." />
           </ul>

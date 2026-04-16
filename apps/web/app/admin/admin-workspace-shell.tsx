@@ -40,6 +40,11 @@ export function AdminWorkspaceShell({ children }: AdminWorkspaceShellProps): Rea
   const navItems = useMemo(
     () => [
       {
+        href: "/admin",
+        label: "Dashboard",
+        active: pathname === "/admin",
+      },
+      {
         href: "/admin/learners",
         label: "Learners",
         active: isNavigationActive(pathname, "/admin/learners"),
@@ -63,7 +68,7 @@ export function AdminWorkspaceShell({ children }: AdminWorkspaceShellProps): Rea
       mainId="admin-main"
       sidebar={<CollapsibleSidebarNav aria-label="Admin sections" items={navItems} LinkComponent={NextNavLink} />}
       header={
-        <AppHeader title="Admin" description="Learners, catalog, and reports">
+        <AppHeader title="Admin" description="Dashboard, learners, catalog, and reports">
           <ResponsiveNav
             aria-label="Admin navigation"
             drawerTitle="Admin"

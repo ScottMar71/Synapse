@@ -13,7 +13,7 @@ function signInHref(pathname: string | null, search: string): string {
   const next =
     pathname && pathname.startsWith("/admin")
       ? `${pathname}${search && search.length > 0 ? search : ""}`
-      : "/admin/categories";
+      : "/admin";
   return `/sign-in?next=${encodeURIComponent(next)}`;
 }
 
