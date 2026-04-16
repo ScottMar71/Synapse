@@ -27,8 +27,8 @@
 ## Apps / web
 
 - `apps/web/app/sign-in/`: development sign-in (tenant + user → `dev|<tenant>|<user>` bearer token, routed to learner or instructor).
-- `apps/web/app/learn/`: learner shell (`lms-learner-shell.tsx` — `@conductor/ui` `PageShell` / `AppHeader` / `ResponsiveNav`), dashboard (`page.tsx` uses `DashboardNumericSummaryRow`, `ContinueLearningRow`, `LearnerDeadlinesList`), catalog, and `courses/[courseId]` learning view (progress + assessment actions via `CourseAssessmentPanel` / `QuizShell`).
-- `apps/web/app/instructor/`: instructor shell (same UI patterns as learner), overview (learners + courses via API); staff **Progress reports** at `instructor/reports/` (also linked from `admin/reports/`).
+- `apps/web/app/learn/`: learner shell (`lms-learner-shell.tsx` — `@conductor/ui` `PageShell` / `CollapsibleSidebarNav` / `AppHeader` / `ResponsiveNav` with `mobileOnly`), dashboard (`page.tsx` uses `DashboardNumericSummaryRow`, `ContinueLearningRow`, `LearnerDeadlinesList`), catalog, and `courses/[courseId]` learning view (progress + assessment actions via `CourseAssessmentPanel` / `QuizShell`).
+- `apps/web/app/instructor/`: instructor shell (same left-rail + header pattern as learner and admin), overview (learners + courses via API); staff **Progress reports** at `instructor/reports/` (also linked from `admin/reports/`).
 - `apps/web/lib/lms-session.ts` + `lms-api-client.ts`: browser session cookies + typed fetch to `/api/v1` (proxied via `next.config.mjs` rewrites to `LMS_API_ORIGIN`).
 - `apps/web/app/admin/`: `layout.tsx` wraps staff routes with `AdminWorkspaceShell` (collapsible sidebar + mobile drawer). Categories: tenant-scoped course categories (API-backed tree, CRUD, course links); shared loading/error UX in `admin-page-states.tsx`. Legacy `categories-wireframe/*` redirects to these routes.
 - `apps/web/app/admin/courses/[courseId]/`: course editor — metadata (`PATCH /courses/:id`), category links (`PUT .../categories`), publish + archive; staff-only gate via `probeInstructorRoute` before load. Layout preview: `player-wireframe/`.
