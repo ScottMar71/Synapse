@@ -20,7 +20,7 @@ Shared building blocks aligned to Conductor knowledge `lms-design-system`.
 
 ## Quiz (assessment shell)
 
-Composable: `QuizShell`, `QuizTimer` (warning threshold + live region), `QuizQuestionNav` (position, flag, prev/next), `QuizActionBar`, `QuizValidationErrors` (icon + text; not color-only). Implemented across `quiz-shell-layout.tsx` and `quiz-*.tsx`, re-exported from `quiz-shell.tsx`.
+Composable: `QuizShell` (optional **`titleHeadingLevel`** `2` | `3` for correct outline when nested under a page `h2`), `QuizTimer` (warning threshold + live region), `QuizQuestionNav` (position, flag, prev/next), `QuizActionBar`, `QuizValidationErrors` (icon + text; not color-only). Implemented across `quiz-shell-layout.tsx` and `quiz-*.tsx`, re-exported from `quiz-shell.tsx`.
 
 ## Learner dashboard widgets
 

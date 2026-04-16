@@ -181,12 +181,12 @@ export function LearnersAdminDashboard(): ReactElement {
   return (
     <div className={styles.shell}>
       <div className={styles.topBar}>
-        <h1 className={styles.titleRow}>
+        <h2 className={styles.titleRow}>
           Learners{" "}
           <span className={styles.staffTag} style={{ opacity: 0.85 }}>
             Staff
           </span>
-        </h1>
+        </h2>
         <div className={styles.actionsRow}>
           <Link href="/admin/reports" className={`${styles.btn} ${styles.btnSecondary}`}>
             Progress reports

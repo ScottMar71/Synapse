@@ -49,7 +49,11 @@ Canonical viewport steps used for documentation and alignment with **`lms-design
 
 ## Spot accessibility audit (apps/web)
 
-Automated **axe-core** checks (via Playwright) for the learner course view (outline + **`QuizShell`** assessment block) and **`/admin/learners`**:
+**Representative routes:** `/learn/courses/:courseId` (outline placeholder, progress, **`QuizShell`** assessment block) and **`/admin/learners`** (responsive **`DataTable`**).
+
+**Tool:** `axe-core` via `@axe-core/playwright` (`apps/web/scripts/a11y-spot-audit.mjs`).
+
+Automated checks:
 
 1. Migrate + seed the demo tenant (`packages/database`), then print IDs:  
    `npm run db:print-a11y-session --workspace=@conductor/database`
@@ -57,3 +61,5 @@ Automated **axe-core** checks (via Playwright) for the learner course view (outl
    `npm run a11y:spot-audit --workspace=@conductor/web`
 
 The script writes a JSON summary to stdout (routes, tool, violation counts) and exits non-zero if any **critical** or **serious** axe rules fail. Use that output in PR / Conductor completion notes.
+
+**Implementation notes (design system §5 / §8 alignment):** Staff shells use **`AppHeader`** with an `h1` (e.g. “Admin” / “Learner”); page titles under that shell should be **`h2`** so there is a single document `h1`. Nested **`QuizShell`** under a course **`h2`** should set **`titleHeadingLevel={3}`** so headings do not skip backward (`h3` outline/progress sections → `h3` assessment title). **`QuizShell`** does not put **`aria-invalid`** on non-widget wrappers; field errors belong on controls (e.g. **`Input`** `error`).
