@@ -49,11 +49,11 @@ Canonical viewport steps used for documentation and alignment with **`lms-design
 
 ## Spot accessibility audit (apps/web)
 
-**Representative routes:** `/learn/courses/:courseId` (outline placeholder, progress, **`QuizShell`** assessment block) and **`/admin/learners`** (responsive **`DataTable`**).
+Automated **axe-core** checks (via Playwright) for the learner course view (outline + **`QuizShell`** assessment block) and **`/admin/learners`** (responsive **`DataTable`**).
+
+**Representative routes:** `/learn/courses/:courseId` (outline placeholder, progress, **`QuizShell`** assessment block) and **`/admin/learners`**.
 
 **Tool:** `axe-core` via `@axe-core/playwright` (`apps/web/scripts/a11y-spot-audit.mjs`).
-
-Automated checks:
 
 1. Migrate + seed the demo tenant (`packages/database`), then print IDs:  
    `npm run db:print-a11y-session --workspace=@conductor/database`
