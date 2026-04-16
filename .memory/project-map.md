@@ -5,7 +5,7 @@
 - `AGENTS.md`: repo-level operating rules for agents
 - `.memory/`: lightweight memory bank and workflow starters
 - `apps/`: runtime applications (`web` and `api`)
-- `packages/`: shared libraries (`contracts`, `platform`, `database`, `ui`)
+- `packages/`: shared libraries (`contracts`, `platform`, `database`, `ui`, `design-tokens` — DTCG JSON in `tokens/lms.tokens.json`, web runtime `tokens.css` imported from `apps/web/app/globals.css`)
 - `outcomes/`: reusable product requirement and outcome docs
 - `tickets/`: implementation tickets linked to outcomes
 
