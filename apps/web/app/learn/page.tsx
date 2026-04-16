@@ -4,6 +4,8 @@ import Link from "next/link";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useState } from "react";
 
+import { ContinueLearningRow, DashboardNumericSummaryRow, LearnerDeadlinesList } from "@conductor/ui";
+
 import { fetchCourse, fetchEnrollments, fetchProgress } from "../../lib/lms-api-client";
 import { getSession } from "../../lib/lms-session";
 
@@ -136,40 +138,64 @@ export default function LearnerDashboardPage(): ReactElement {
     );
   }
 
+  const percents = state.rows
+    .map((r) => r.courseProgressPercent)
+    .filter((p): p is number => p !== null);
+  const avgRaw =
+    percents.length > 0 ? Math.round(percents.reduce((a, b) => a + b, 0) / percents.length) : null;
+  const inProgressCount = state.rows.filter(
+    (r) =>
+      r.courseProgressPercent !== null && r.courseProgressPercent > 0 && r.courseProgressPercent < 100
+  ).length;
+
   return (
-    <section aria-labelledby="enrolled-heading">
-      <h2 id="enrolled-heading" style={{ fontSize: "1rem", marginTop: 0 }}>
-        My courses
-      </h2>
-      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-        {state.rows.map((row) => (
-          <li
-            key={row.courseId}
-            style={{
-              background: "var(--color-surface)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-md)",
-              padding: "var(--space-4)"
-            }}
-          >
-            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "var(--space-3)" }}>
-              <div>
-                <h3 style={{ margin: "0 0 var(--space-2)", fontSize: "1rem" }}>{row.title}</h3>
-                <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--color-text-muted)" }}>
-                  Enrollment: {row.enrollmentStatus}
-                  {row.courseProgressPercent !== null ? ` · Progress: ${row.courseProgressPercent}%` : ""}
-                </p>
-              </div>
-              <Link
-                href={`/learn/courses/${encodeURIComponent(row.courseId)}`}
-                style={{ alignSelf: "center", fontWeight: 600, fontSize: "0.875rem" }}
-              >
-                Continue →
-              </Link>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <DashboardNumericSummaryRow
+        items={[
+          {
+            id: "enrolled",
+            value: String(state.rows.length),
+            label: "Enrolled courses",
+            caption: "Active enrollments",
+          },
+          {
+            id: "avg-progress",
+            value: avgRaw === null ? "—" : `${String(avgRaw)}%`,
+            label: "Average progress",
+            caption: "Across courses with progress recorded",
+          },
+          {
+            id: "in-progress",
+            value: String(inProgressCount),
+            label: "In progress",
+            caption: "Started but not complete",
+          },
+        ]}
+      />
+
+      <ContinueLearningRow
+        description="Pick up where you left off."
+        items={state.rows.map((row) => ({
+          id: row.courseId,
+          title: row.title,
+          meta: `Enrollment: ${row.enrollmentStatus}${
+            row.courseProgressPercent !== null ? ` · Progress: ${row.courseProgressPercent}%` : ""
+          }`,
+          action: (
+            <Link
+              href={`/learn/courses/${encodeURIComponent(row.courseId)}`}
+              style={{ fontWeight: 600, fontSize: "0.875rem" }}
+            >
+              Continue →
+            </Link>
+          ),
+        }))}
+      />
+
+      <LearnerDeadlinesList
+        description="Due dates from your courses appear here when the LMS schedules them."
+        items={[]}
+      />
+    </div>
   );
 }

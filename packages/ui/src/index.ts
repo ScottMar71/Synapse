@@ -109,3 +109,30 @@ export type {
   ProgressTrackerVariant,
 } from "./lms/progress-tracker";
 export { ProgressTracker } from "./lms/progress-tracker";
+export type {
+  DashboardNumericStat,
+  DashboardNumericSummaryRowProps,
+  ContinueLearningItem,
+  ContinueLearningRowProps,
+  LearnerDeadlineItem,
+  LearnerDeadlinesListProps,
+} from "./lms/learner-dashboard-widgets";
+export {
+  ContinueLearningRow,
+  DashboardNumericSummaryRow,
+  LearnerDeadlinesList,
+} from "./lms/learner-dashboard-widgets";
+export type {
+  QuizActionBarProps,
+  QuizQuestionNavProps,
+  QuizShellProps,
+  QuizTimerProps,
+  QuizValidationErrorsProps,
+} from "./lms/quiz-shell";
+export {
+  QuizActionBar,
+  QuizQuestionNav,
+  QuizShell,
+  QuizTimer,
+  QuizValidationErrors,
+} from "./lms/quiz-shell";

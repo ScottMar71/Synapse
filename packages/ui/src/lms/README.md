@@ -17,3 +17,11 @@ Shared building blocks aligned to Conductor knowledge `lms-design-system`.
 ## Lesson viewer
 
 `LessonViewerLayout` — breadcrumb, title, desktop outline sidebar, and optional **Next lesson** CTA on small viewports. `LessonViewerReadingMeasure` constrains prose to **65ch**; keep full-width media outside that wrapper.
+
+## Quiz (assessment shell)
+
+Composable: `QuizShell`, `QuizTimer` (warning threshold + live region), `QuizQuestionNav` (position, flag, prev/next), `QuizActionBar`, `QuizValidationErrors` (icon + text; not color-only). Implemented across `quiz-shell-layout.tsx` and `quiz-*.tsx`, re-exported from `quiz-shell.tsx`.
+
+## Learner dashboard widgets
+
+`DashboardNumericSummaryRow`, `ContinueLearningRow`, `LearnerDeadlinesList` — home KPIs, continue-learning tiles, and deadlines with empty state (`learner-dashboard-widgets.tsx`).

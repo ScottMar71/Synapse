@@ -1,4 +1,17 @@
+"use client";
+
 import type { ReactElement } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+import {
+  Input,
+  QuizActionBar,
+  QuizQuestionNav,
+  QuizShell,
+  QuizTimer,
+} from "@conductor/ui";
+
+const ATTEMPT_DURATION_SECONDS = 15 * 60;
 
 type CourseAssessmentPanelProps = {
   assessmentId: string;
@@ -6,6 +19,7 @@ type CourseAssessmentPanelProps = {
   onSaveDraft: () => void;
   onSubmit: () => void;
   assessmentMessage: string | null;
+  assessmentBusy?: boolean;
 };
 
 export function CourseAssessmentPanel({
@@ -13,78 +27,74 @@ export function CourseAssessmentPanel({
   onAssessmentIdChange,
   onSaveDraft,
   onSubmit,
-  assessmentMessage
+  assessmentMessage,
+  assessmentBusy = false,
 }: CourseAssessmentPanelProps): ReactElement {
+  const [secondsRemaining, setSecondsRemaining] = useState(ATTEMPT_DURATION_SECONDS);
+  const [flagged, setFlagged] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setSecondsRemaining((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => {
+      window.clearInterval(id);
+    };
+  }, []);
+
+  const validateAndRun = useCallback(
+    (action: () => void) => {
+      if (!assessmentId.trim()) {
+        setValidationErrors(["Enter an assessment ID before saving or submitting."]);
+        return;
+      }
+      setValidationErrors([]);
+      action();
+    },
+    [assessmentId],
+  );
+
   return (
-    <section
-      aria-labelledby="assessment-heading"
-      style={{
-        padding: "var(--space-4)",
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border)",
-        borderRadius: "var(--radius-md)"
-      }}
-    >
-      <h3 id="assessment-heading" style={{ marginTop: 0, fontSize: "1rem" }}>
-        Assessment
-      </h3>
-      <p style={{ margin: "0 0 var(--space-3)", fontSize: "0.875rem", color: "var(--color-text-muted)" }}>
-        Enter an assessment identifier from your tenant (for example from seed data) to exercise draft and submit flows.
-      </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", maxWidth: "24rem" }}>
-        <label htmlFor="assessment-id" style={{ fontWeight: 600, fontSize: "0.875rem" }}>
-          Assessment ID
-        </label>
-        <input
-          id="assessment-id"
-          value={assessmentId}
-          onChange={(e) => {
-            onAssessmentIdChange(e.target.value);
-          }}
-          autoComplete="off"
-          style={{
-            padding: "var(--space-2)",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--color-border)"
+    <QuizShell
+      title="Assessment"
+      description="Enter an assessment identifier from your tenant (for example from seed data) to exercise draft and submit flows."
+      timer={<QuizTimer secondsRemaining={secondsRemaining} warnBelowSeconds={60} />}
+      questionNav={
+        <QuizQuestionNav
+          currentIndex={1}
+          total={1}
+          flagged={flagged}
+          onFlagToggle={() => {
+            setFlagged((f) => !f);
           }}
         />
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
-          <button
-            type="button"
-            onClick={onSaveDraft}
-            style={{
-              padding: "var(--space-2) var(--space-3)",
-              borderRadius: "var(--radius-sm)",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-surface-muted)",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            Save draft
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            style={{
-              padding: "var(--space-2) var(--space-3)",
-              borderRadius: "var(--radius-sm)",
-              border: "none",
-              background: "var(--color-primary)",
-              color: "#fff",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            Submit attempt
-          </button>
-        </div>
-      </div>
-      {assessmentMessage ? (
-        <p role="status" style={{ margin: "var(--space-3) 0 0", fontSize: "0.875rem" }}>
-          {assessmentMessage}
-        </p>
-      ) : null}
-    </section>
+      }
+      validationErrors={validationErrors}
+      actions={
+        <QuizActionBar
+          onSaveDraft={() => {
+            validateAndRun(onSaveDraft);
+          }}
+          onSubmit={() => {
+            validateAndRun(onSubmit);
+          }}
+          busy={assessmentBusy}
+        />
+      }
+      statusMessage={assessmentMessage}
+    >
+      <Input
+        label="Assessment ID"
+        hint="Used with the LMS submissions API for this demo flow."
+        value={assessmentId}
+        onChange={(e) => {
+          setValidationErrors([]);
+          onAssessmentIdChange(e.target.value);
+        }}
+        autoComplete="off"
+        disabled={assessmentBusy}
+      />
+    </QuizShell>
   );
 }
