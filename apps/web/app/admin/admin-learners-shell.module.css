@@ -180,6 +180,10 @@
   box-shadow: var(--shadow-sm);
 }
 
+.dataTableBlock {
+  margin-top: var(--space-4);
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
