@@ -1,0 +1,37 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+.neutral {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-default);
+}
+.info {
+  background: var(--color-primary-muted);
+  color: var(--color-action-primary);
+  border-color: color-mix(in srgb, var(--color-action-primary) 25%, var(--color-border-default));
+}
+.success {
+  background: color-mix(in srgb, var(--color-status-success) 14%, var(--color-bg-surface));
+  color: var(--color-status-success);
+  border-color: color-mix(in srgb, var(--color-status-success) 35%, var(--color-border-default));
+}
+.warning {
+  background: color-mix(in srgb, var(--color-status-warning) 18%, var(--color-bg-surface));
+  color: color-mix(in srgb, var(--color-status-warning) 85%, var(--color-text-primary));
+  border-color: color-mix(in srgb, var(--color-status-warning) 40%, var(--color-border-default));
+}
+.error {
+  background: color-mix(in srgb, var(--color-status-error) 12%, var(--color-bg-surface));
+  color: var(--color-status-error);
+  border-color: color-mix(in srgb, var(--color-status-error) 35%, var(--color-border-default));
+}

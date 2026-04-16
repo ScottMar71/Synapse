@@ -2,6 +2,14 @@ import type { ReactElement, ReactNode } from "react";
 import Link from "next/link";
 
 import type { LmsPlatformContract } from "@conductor/contracts";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Link as DesignSystemLink,
+} from "@conductor/ui";
 
 const runtimeContract: LmsPlatformContract = {
   apiBasePath: "/api/v1",
@@ -133,6 +141,50 @@ export default function HomePage(): ReactElement {
             </HubLink>
             <HubLink href="/admin/reports">Progress reports (admin) →</HubLink>
           </div>
+        </section>
+
+        <section style={{ marginTop: "var(--space-4)" }}>
+          <Card variant="outlined">
+            <CardHeader
+              title="Design system primitives"
+              description="Shared @conductor/ui components (lms-design-system §3.1); styles use tokens from @conductor/design-tokens."
+            />
+            <CardContent
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "var(--space-3)",
+                alignItems: "center",
+              }}
+            >
+              <Button type="button" variant="primary" size="sm">
+                Primary
+              </Button>
+              <Button type="button" variant="secondary" size="sm">
+                Secondary
+              </Button>
+              <Button type="button" variant="tertiary" size="sm">
+                Tertiary
+              </Button>
+              <Button type="button" variant="destructive" size="sm">
+                Destructive
+              </Button>
+              <Button type="button" variant="primary" size="sm" loading>
+                Loading
+              </Button>
+              <Badge variant="neutral">Neutral</Badge>
+              <Badge variant="info">Info</Badge>
+              <Badge variant="success">Success</Badge>
+              <Badge variant="warning">Warning</Badge>
+              <Badge variant="error">Error</Badge>
+              <DesignSystemLink href="https://example.com" external variant="default">
+                External link
+              </DesignSystemLink>
+              <DesignSystemLink href="/sign-in" variant="subtle">
+                Subtle internal link
+              </DesignSystemLink>
+            </CardContent>
+          </Card>
         </section>
 
         <section style={{ ...sectionCard, marginTop: "var(--space-4)" }}>

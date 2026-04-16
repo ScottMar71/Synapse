@@ -5,7 +5,7 @@
 - `AGENTS.md`: repo-level operating rules for agents
 - `.memory/`: lightweight memory bank and workflow starters
 - `apps/`: runtime applications (`web` and `api`)
-- `packages/`: shared libraries (`contracts`, `platform`, `database`, `ui`, `design-tokens` — DTCG JSON in `tokens/lms.tokens.json`, web runtime `tokens.css` imported from `apps/web/app/globals.css`)
+- `packages/`: shared libraries (`contracts`, `platform`, `database`, `ui` — primitives `Button`, `Link`, `Badge`, `Card` in `packages/ui/src/primitives/`; `design-tokens` — DTCG JSON in `tokens/lms.tokens.json`, web runtime `tokens.css` imported from `apps/web/app/globals.css`)
 - `outcomes/`: reusable product requirement and outcome docs
 - `tickets/`: implementation tickets linked to outcomes
 
@@ -27,10 +27,10 @@
 ## Apps / web
 
 - `apps/web/app/sign-in/`: development sign-in (tenant + user → `dev|<tenant>|<user>` bearer token, routed to learner or instructor).
-- `apps/web/app/learn/`: learner shell (`lms-learner-shell.tsx`), dashboard, catalog, and `courses/[courseId]` learning view (progress + assessment actions).
-- `apps/web/app/instructor/`: instructor shell and overview (learners + courses via API); staff **Progress reports** at `instructor/reports/` (also linked from `admin/reports/`).
+- `apps/web/app/learn/`: learner shell (`lms-learner-shell.tsx` — `@conductor/ui` `PageShell` / `AppHeader` / `ResponsiveNav`), dashboard, catalog, and `courses/[courseId]` learning view (progress + assessment actions).
+- `apps/web/app/instructor/`: instructor shell (same UI patterns as learner), overview (learners + courses via API); staff **Progress reports** at `instructor/reports/` (also linked from `admin/reports/`).
 - `apps/web/lib/lms-session.ts` + `lms-api-client.ts`: browser session cookies + typed fetch to `/api/v1` (proxied via `next.config.mjs` rewrites to `LMS_API_ORIGIN`).
-- `apps/web/app/admin/categories/`: tenant-scoped course categories (API-backed tree, CRUD, course links); shared loading/error UX in `admin-page-states.tsx`. Legacy `categories-wireframe/*` redirects to these routes.
+- `apps/web/app/admin/`: `layout.tsx` wraps staff routes with `AdminWorkspaceShell` (collapsible sidebar + mobile drawer). Categories: tenant-scoped course categories (API-backed tree, CRUD, course links); shared loading/error UX in `admin-page-states.tsx`. Legacy `categories-wireframe/*` redirects to these routes.
 - `apps/web/app/admin/courses/[courseId]/`: course editor — metadata (`PATCH /courses/:id`), category links (`PUT .../categories`), publish + archive; staff-only gate via `probeInstructorRoute` before load. Layout preview: `player-wireframe/`.
 - `apps/web/app/admin/learners/`: learners directory (`GET .../learners`) and add flow (`POST .../learners`, admin-only). Legacy `learners-wireframe/*` redirects to these routes.
 - `apps/web/app/admin/wireframe-course-category-presets.ts`: shared preset list for course editor “Course Categories” and the categories dashboard wireframe.
