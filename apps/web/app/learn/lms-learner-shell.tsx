@@ -39,14 +39,18 @@ export function LmsLearnerShell({ children }: LmsLearnerShellProps): ReactElemen
     router.replace("/sign-in");
   }, [router]);
 
-  const navItems = useMemo(
-    () => [
-      { href: "/learn", label: "Dashboard", active: isNavigationActive(pathname, "/learn") },
-      { href: "/learn/catalog", label: "Catalog", active: isNavigationActive(pathname, "/learn/catalog") },
+  const navItems = useMemo(() => {
+    const onCatalog = pathname.startsWith("/learn/catalog");
+    return [
+      {
+        href: "/learn",
+        label: "Dashboard",
+        active: !onCatalog && isNavigationActive(pathname, "/learn"),
+      },
+      { href: "/learn/catalog", label: "Catalog", active: onCatalog },
       { href: "/", label: "Home", active: pathname === "/" },
-    ],
-    [pathname],
-  );
+    ];
+  }, [pathname]);
 
   return (
     <PageShell

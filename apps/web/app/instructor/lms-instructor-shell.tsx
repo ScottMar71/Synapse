@@ -39,14 +39,18 @@ export function LmsInstructorShell({ children }: LmsInstructorShellProps): React
     router.replace("/sign-in");
   }, [router]);
 
-  const navItems = useMemo(
-    () => [
-      { href: "/instructor", label: "Overview", active: isNavigationActive(pathname, "/instructor") },
-      { href: "/instructor/reports", label: "Reports", active: isNavigationActive(pathname, "/instructor/reports") },
+  const navItems = useMemo(() => {
+    const onReports = pathname.startsWith("/instructor/reports");
+    return [
+      {
+        href: "/instructor",
+        label: "Overview",
+        active: !onReports && isNavigationActive(pathname, "/instructor"),
+      },
+      { href: "/instructor/reports", label: "Reports", active: onReports },
       { href: "/", label: "Home", active: pathname === "/" },
-    ],
-    [pathname],
-  );
+    ];
+  }, [pathname]);
 
   return (
     <PageShell
