@@ -1,3 +1,5 @@
+"use client";
+
 import type { SyntheticEvent, VideoHTMLAttributes } from "react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 

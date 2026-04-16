@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import type { LmsPlatformContract } from "@conductor/contracts";
 import { DesignSystemFormShowcase } from "./design-system-form-showcase";
+import { DesignSystemOverlaysShowcase } from "./design-system-overlays-showcase";
 import {
   Badge,
   Button,
@@ -190,6 +191,10 @@ export default function HomePage(): ReactElement {
 
         <section style={{ ...sectionCard, marginTop: "var(--space-4)" }}>
           <DesignSystemFormShowcase />
+        </section>
+
+        <section style={{ ...sectionCard, marginTop: "var(--space-4)" }}>
+          <DesignSystemOverlaysShowcase />
         </section>
 
         <section style={{ ...sectionCard, marginTop: "var(--space-4)" }}>

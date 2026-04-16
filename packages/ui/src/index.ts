@@ -30,6 +30,17 @@ export { Switch } from "./primitives/switch";
 export type { TextareaProps } from "./primitives/textarea";
 export { Textarea } from "./primitives/textarea";
 
+export type { DrawerPlacement, DrawerProps } from "./primitives/drawer";
+export { Drawer } from "./primitives/drawer";
+export type { ModalProps, ModalWidth } from "./primitives/modal";
+export { Modal } from "./primitives/modal";
+export type { ProgressProps } from "./primitives/progress";
+export { Progress } from "./primitives/progress";
+export type { SpinnerProps, SpinnerSize } from "./primitives/spinner";
+export { Spinner } from "./primitives/spinner";
+export type { ToastProps, ToastTone } from "./primitives/toast";
+export { Toast } from "./primitives/toast";
+
 export type {
   VideoPlayTracking,
   VideoPlayerHandle,
