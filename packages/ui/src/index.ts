@@ -30,6 +30,14 @@ export { Switch } from "./primitives/switch";
 export type { TextareaProps } from "./primitives/textarea";
 export { Textarea } from "./primitives/textarea";
 
+export type {
+  VideoPlayTracking,
+  VideoPlayerHandle,
+  VideoPlayerProps,
+  VideoProgressInfo,
+} from "./primitives/video-player";
+export { VideoPlayer } from "./primitives/video-player";
+
 export type { AppHeaderProps } from "./patterns/app-header";
 export { AppHeader } from "./patterns/app-header";
 export type { BreadcrumbItem, BreadcrumbProps } from "./patterns/breadcrumb";
