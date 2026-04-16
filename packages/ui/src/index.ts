@@ -32,10 +32,20 @@ export { Textarea } from "./primitives/textarea";
 
 export type { EmptyStateProps } from "./primitives/empty-state";
 export { EmptyState } from "./primitives/empty-state";
+export type { DrawerPlacement, DrawerProps } from "./primitives/drawer";
+export { Drawer } from "./primitives/drawer";
+export type { ModalProps, ModalWidth } from "./primitives/modal";
+export { Modal } from "./primitives/modal";
 export type { PaginationProps } from "./primitives/pagination";
 export { Pagination } from "./primitives/pagination";
+export type { ProgressProps } from "./primitives/progress";
+export { Progress } from "./primitives/progress";
 export type { SkeletonProps } from "./primitives/skeleton";
 export { Skeleton } from "./primitives/skeleton";
+export type { SpinnerProps, SpinnerSize } from "./primitives/spinner";
+export { Spinner } from "./primitives/spinner";
+export type { ToastProps, ToastTone } from "./primitives/toast";
+export { Toast } from "./primitives/toast";
 export type { TooltipProps } from "./primitives/tooltip";
 export { Tooltip } from "./primitives/tooltip";
 
