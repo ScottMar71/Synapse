@@ -24,6 +24,7 @@ export default function LearnerCoursePage(): ReactElement {
   const [percentInput, setPercentInput] = useState("0");
   const [assessmentId, setAssessmentId] = useState("");
   const [assessmentMessage, setAssessmentMessage] = useState<string | null>(null);
+  const [assessmentBusy, setAssessmentBusy] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -89,24 +90,34 @@ export default function LearnerCoursePage(): ReactElement {
     const session = getSession();
     if (!session || !assessmentId.trim()) return;
     setAssessmentMessage(null);
-    const result = await putSubmissionDraft(session, assessmentId.trim());
-    if (!result.ok) {
-      setAssessmentMessage(result.error.message);
-      return;
+    setAssessmentBusy(true);
+    try {
+      const result = await putSubmissionDraft(session, assessmentId.trim());
+      if (!result.ok) {
+        setAssessmentMessage(result.error.message);
+        return;
+      }
+      setAssessmentMessage(`Draft ready (${result.submission.status}).`);
+    } finally {
+      setAssessmentBusy(false);
     }
-    setAssessmentMessage(`Draft ready (${result.submission.status}).`);
   }, [assessmentId]);
 
   const submitAssessment = useCallback(async () => {
     const session = getSession();
     if (!session || !assessmentId.trim()) return;
     setAssessmentMessage(null);
-    const result = await postSubmitAssessment(session, assessmentId.trim());
-    if (!result.ok) {
-      setAssessmentMessage(result.error.message);
-      return;
+    setAssessmentBusy(true);
+    try {
+      const result = await postSubmitAssessment(session, assessmentId.trim());
+      if (!result.ok) {
+        setAssessmentMessage(result.error.message);
+        return;
+      }
+      setAssessmentMessage(`Submitted (${result.submission.status}).`);
+    } finally {
+      setAssessmentBusy(false);
     }
-    setAssessmentMessage(`Submitted (${result.submission.status}).`);
   }, [assessmentId]);
 
   if (state.status === "loading") {
@@ -172,6 +183,7 @@ export default function LearnerCoursePage(): ReactElement {
           void submitAssessment();
         }}
         assessmentMessage={assessmentMessage}
+        assessmentBusy={assessmentBusy}
       />
     </article>
   );

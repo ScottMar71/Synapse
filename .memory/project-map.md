@@ -5,7 +5,7 @@
 - `AGENTS.md`: repo-level operating rules for agents
 - `.memory/`: lightweight memory bank and workflow starters
 - `apps/`: runtime applications (`web` and `api`)
-- `packages/`: shared libraries (`contracts`, `platform`, `database`, `ui` — primitives in `packages/ui/src/primitives/` (includes `Modal`, `Drawer`, `Toast`, `Progress`, `Spinner`, form controls, `DataTable`-related) + layout/navigation **patterns** in `packages/ui/src/patterns/` (`PageShell`, `AppHeader`, `ResponsiveNav`, `CollapsibleSidebarNav`, `MobileNavDrawer`, `Breadcrumb`, `Tabs`, `SkipLink`, `DataTable`; CSS modules `patterns-shell`, `patterns-nav`, `patterns-tabs`, `patterns-drawer`) + LMS lesson UI in `packages/ui/src/lms/` (`LessonOutline`, `LessonViewerLayout`, `LessonViewerReadingMeasure`; see `README.md`, Conductor `lms-design-system` §3.2) + `FORM-PRIMITIVES.md` / `LAYOUT-PATTERNS.md`; `design-tokens` — DTCG JSON in `tokens/lms.tokens.json`, web runtime `tokens.css` imported from `apps/web/app/globals.css`)
+- `packages/`: shared libraries (`contracts`, `platform`, `database`, `ui` — primitives in `packages/ui/src/primitives/` (includes `Modal`, `Drawer`, `Toast`, `Progress`, `Spinner`, form controls, `DataTable`-related) + layout/navigation **patterns** in `packages/ui/src/patterns/` (`PageShell`, `AppHeader`, `ResponsiveNav`, `CollapsibleSidebarNav`, `MobileNavDrawer`, `Breadcrumb`, `Tabs`, `SkipLink`, `DataTable`; CSS modules `patterns-shell`, `patterns-nav`, `patterns-tabs`, `patterns-drawer`) + LMS UI in `packages/ui/src/lms/` (`LessonOutline`, `LessonViewerLayout`, `LessonViewerReadingMeasure`, quiz shell `QuizShell`/`QuizTimer`/`QuizQuestionNav`/`QuizActionBar`, dashboard widgets `DashboardNumericSummaryRow`/`ContinueLearningRow`/`LearnerDeadlinesList`; see `README.md`, Conductor `lms-design-system` §3.2) + `FORM-PRIMITIVES.md` / `LAYOUT-PATTERNS.md`; `design-tokens` — DTCG JSON in `tokens/lms.tokens.json`, web runtime `tokens.css` imported from `apps/web/app/globals.css`)
 - `outcomes/`: reusable product requirement and outcome docs
 - `tickets/`: implementation tickets linked to outcomes
 
@@ -27,7 +27,7 @@
 ## Apps / web
 
 - `apps/web/app/sign-in/`: development sign-in (tenant + user → `dev|<tenant>|<user>` bearer token, routed to learner or instructor).
-- `apps/web/app/learn/`: learner shell (`lms-learner-shell.tsx` — `@conductor/ui` `PageShell` / `AppHeader` / `ResponsiveNav`), dashboard, catalog, and `courses/[courseId]` learning view (progress + assessment actions).
+- `apps/web/app/learn/`: learner shell (`lms-learner-shell.tsx` — `@conductor/ui` `PageShell` / `AppHeader` / `ResponsiveNav`), dashboard (`page.tsx` uses `DashboardNumericSummaryRow`, `ContinueLearningRow`, `LearnerDeadlinesList`), catalog, and `courses/[courseId]` learning view (progress + assessment actions via `CourseAssessmentPanel` / `QuizShell`).
 - `apps/web/app/instructor/`: instructor shell (same UI patterns as learner), overview (learners + courses via API); staff **Progress reports** at `instructor/reports/` (also linked from `admin/reports/`).
 - `apps/web/lib/lms-session.ts` + `lms-api-client.ts`: browser session cookies + typed fetch to `/api/v1` (proxied via `next.config.mjs` rewrites to `LMS_API_ORIGIN`).
 - `apps/web/app/admin/`: `layout.tsx` wraps staff routes with `AdminWorkspaceShell` (collapsible sidebar + mobile drawer). Categories: tenant-scoped course categories (API-backed tree, CRUD, course links); shared loading/error UX in `admin-page-states.tsx`. Legacy `categories-wireframe/*` redirects to these routes.
