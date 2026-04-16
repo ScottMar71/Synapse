@@ -1,0 +1,163 @@
+/* Lesson outline — lms-design-system §3.2 (collapsible modules, lesson types, completion, current highlight) */
+
+.root {
+  font-family: var(--font-family-sans);
+}
+
+.moduleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.module {
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  overflow: hidden;
+}
+
+.moduleSummary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  background: var(--color-bg-subtle);
+  min-height: var(--size-touch-minimum);
+  box-sizing: border-box;
+}
+
+.moduleSummary::-webkit-details-marker {
+  display: none;
+}
+
+.moduleSummary::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid var(--color-text-muted);
+  border-bottom: 2px solid var(--color-text-muted);
+  transform: rotate(45deg);
+  transition: transform var(--duration-base) cubic-bezier(0.2, 0, 0, 1);
+  flex-shrink: 0;
+}
+
+.module[open] .moduleSummary::after {
+  transform: rotate(-135deg);
+}
+
+.moduleSummary:hover {
+  background: var(--color-bg-muted);
+}
+
+.moduleSummary:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.moduleMeta {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.lessonList {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.lessonRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--size-touch-minimum);
+  padding: var(--space-2) var(--space-2);
+  box-sizing: border-box;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.lessonRow:hover {
+  background: var(--color-bg-subtle);
+}
+
+.lessonRow:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.lessonRowCurrent {
+  background: var(--color-bg-subtle);
+  border-color: var(--color-action-primary);
+  box-shadow: inset 3px 0 0 var(--color-action-primary);
+}
+
+.lessonTypeIcon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-caption);
+  line-height: 1;
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+}
+
+.lessonBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lessonTitle {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.lessonMeta {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.statusMark {
+  flex-shrink: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+
+.statusMarkDone {
+  color: var(--color-status-success);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moduleSummary::after {
+    transition: none;
+  }
+}

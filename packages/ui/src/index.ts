@@ -84,3 +84,13 @@ export type { SkipLinkProps } from "./patterns/skip-link";
 export { SkipLink } from "./patterns/skip-link";
 export type { TabItem, TabsProps } from "./patterns/tabs";
 export { Tabs } from "./patterns/tabs";
+
+export type {
+  LessonOutlineLesson,
+  LessonOutlineLessonType,
+  LessonOutlineModule,
+  LessonOutlineProps,
+} from "./lms/lesson-outline";
+export { LessonOutline } from "./lms/lesson-outline";
+export type { LessonViewerLayoutProps, LessonViewerReadingMeasureProps } from "./lms/lesson-viewer-layout";
+export { LessonViewerLayout, LessonViewerReadingMeasure } from "./lms/lesson-viewer-layout";
