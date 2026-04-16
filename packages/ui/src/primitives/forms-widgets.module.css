@@ -1,0 +1,178 @@
+/* Choice, switch, file — lms-design-system §3.1 */
+
+.choiceRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--size-touch-minimum);
+  padding: var(--space-1) 0;
+}
+
+.choiceInput {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+  accent-color: var(--color-action-primary);
+  cursor: pointer;
+}
+
+.choiceInput:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.choiceLabel {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-family: var(--font-family-sans);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+  min-width: 0;
+}
+
+.legend {
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family-sans);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.radioGroupInner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--size-touch-minimum);
+}
+
+.switchLabel {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-family: var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+
+.switchTrack {
+  position: relative;
+  width: 2.75rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-subtle);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard);
+}
+
+.switchTrack[data-on="true"] {
+  background: var(--color-action-primary);
+  border-color: var(--color-action-primary);
+}
+
+.switchTrack:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.switchTrack:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  background: var(--color-bg-muted);
+}
+
+.switchThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.5rem - 6px);
+  height: calc(1.5rem - 6px);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-fast) var(--easing-standard);
+}
+
+.switchTrack[data-on="true"] .switchThumb {
+  transform: translateX(1.2rem);
+}
+
+.fileDrop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
+    background var(--duration-fast) var(--easing-standard);
+}
+
+.fileDrop[data-drag="true"] {
+  border-color: var(--color-action-primary);
+  background: color-mix(in srgb, var(--color-action-primary) 6%, var(--color-bg-surface));
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.fileList {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.fileRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+  font-size: var(--font-size-body-sm);
+}
+
+.fileName {
+  color: var(--color-text-primary);
+  word-break: break-all;
+}
+
+.fileErr {
+  font-size: var(--font-size-caption);
+  color: var(--color-status-error);
+}
