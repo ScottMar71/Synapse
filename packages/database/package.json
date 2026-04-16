@@ -14,6 +14,7 @@
     "db:migrate:dev": "prisma migrate dev --schema prisma/schema.prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:seed": "node prisma/seed.mjs",
+    "db:print-a11y-session": "node scripts/print-demo-session-exports.mjs",
     "db:reset": "prisma migrate reset --schema prisma/schema.prisma --force"
   },
   "dependencies": {
