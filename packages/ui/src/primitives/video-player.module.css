@@ -1,0 +1,15 @@
+.wrap {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-subtle);
+}
+
+.video {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
