@@ -1,6 +1,13 @@
 "use client";
 
-import { AppHeader, Button, isNavigationActive, PageShell, ResponsiveNav } from "@conductor/ui";
+import {
+  AppHeader,
+  Button,
+  CollapsibleSidebarNav,
+  isNavigationActive,
+  PageShell,
+  ResponsiveNav,
+} from "@conductor/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactElement, ReactNode } from "react";
@@ -55,6 +62,13 @@ export function LmsInstructorShell({ children }: LmsInstructorShellProps): React
   return (
     <PageShell
       mainId="instructor-main"
+      sidebar={
+        <CollapsibleSidebarNav
+          aria-label="Instructor sections"
+          items={navItems}
+          LinkComponent={NextNavLink}
+        />
+      }
       header={
         <AppHeader title="Instructor" description="Learners and catalog overview">
           <>
@@ -62,6 +76,7 @@ export function LmsInstructorShell({ children }: LmsInstructorShellProps): React
               aria-label="Instructor navigation"
               drawerTitle="Instructor"
               items={navItems}
+              mobileOnly
               LinkComponent={NextNavLink}
             />
             <Button type="button" variant="tertiary" size="sm" onClick={signOut}>
