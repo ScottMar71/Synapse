@@ -1,0 +1,39 @@
+/* Supplementary hints only — trigger must have a visible name (§5). */
+
+.root {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  left: 50%;
+  bottom: calc(100% + var(--space-2));
+  transform: translateX(-50%);
+  min-width: 10rem;
+  max-width: min(18rem, 90vw);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+
+.tooltip[data-visible="false"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
