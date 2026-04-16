@@ -88,7 +88,10 @@ export function LessonViewerLayout({
             </div>
           ) : null}
 
-          <main className={styles.mainLandmark} aria-label={mainAriaLabel}>
+          <main
+            className={styles.mainLandmark}
+            {...(mainAriaLabel ? { "aria-label": mainAriaLabel } : {})}
+          >
             {children}
           </main>
         </div>

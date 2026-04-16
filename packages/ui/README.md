@@ -33,3 +33,27 @@ Output is written to `packages/ui/storybook-static/` (gitignored).
 ## Consumers
 
 Apps should depend on `@conductor/ui` and import published entry points from `src/index.ts`. Ensure the app imports design tokens (for example `@conductor/design-tokens/tokens.css` in global styles) so CSS variables resolve.
+
+## Responsive breakpoints (design system §8)
+
+Canonical viewport steps used for documentation and alignment with **`lms-design-system`**:
+
+| Width (px) | Role in this package / apps |
+|------------|------------------------------|
+| **640** | Small tablet / large phone — matches common `sm` step when extending Tailwind; use for new dense layouts if you need a step between “phone” and `md`. |
+| **768** | **`DataTable`** `modeCards`: stacked **cards** below this width; **table** from `min-width: 768px` (`data-table.module.css`). `PageShell` collapses the desktop sidebar rail below **767px** (`patterns-shell.module.css`). |
+| **1024** | **`LessonViewerLayout`**: two-column grid, sticky outline aside, hide mobile “next lesson” CTA (`lesson-viewer-layout.module.css`). |
+| **1280** | Admin route shells cap page width at **1280px** (`apps/web/app/admin/*-shell.module.css`). |
+
+**Table → cards:** `DataTable` prop `responsiveMode="cards"` (default) shows one card per row under **768px**; use `scroll` for horizontal scroll + hint instead.
+
+## Spot accessibility audit (apps/web)
+
+Automated **axe-core** checks (via Playwright) for the learner course view (outline + **`QuizShell`** assessment block) and **`/admin/learners`**:
+
+1. Migrate + seed the demo tenant (`packages/database`), then print IDs:  
+   `npm run db:print-a11y-session --workspace=@conductor/database`
+2. Export the printed `A11Y_*` variables, run **`apps/api`** and **`apps/web`** locally, then:  
+   `npm run a11y:spot-audit --workspace=@conductor/web`
+
+The script writes a JSON summary to stdout (routes, tool, violation counts) and exits non-zero if any **critical** or **serious** axe rules fail. Use that output in PR / Conductor completion notes.

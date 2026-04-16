@@ -1,5 +1,4 @@
 import type { ReactElement } from "react";
-import { useId } from "react";
 
 import { cx } from "../internal/cx";
 import styles from "./quiz-shell.module.css";
@@ -26,7 +25,6 @@ export function QuizTimer({
 }: QuizTimerProps): ReactElement {
   const safe = Math.max(0, secondsRemaining);
   const warn = safe > 0 && safe <= warnBelowSeconds;
-  const labelId = useId();
   const ariaLabel = warn
     ? `Time remaining ${formatDuration(safe)}. Warning: ${String(warnBelowSeconds)} seconds or less.`
     : `Time remaining ${formatDuration(safe)}`;
@@ -36,10 +34,9 @@ export function QuizTimer({
       className={cx(styles.timer, warn ? styles.timerWarn : undefined, className)}
       role={warn ? "status" : undefined}
       aria-live={warn ? "polite" : undefined}
-      aria-labelledby={labelId}
       aria-label={ariaLabel}
     >
-      <span className={styles.timerLabel} id={labelId}>
+      <span className={styles.timerLabel} aria-hidden>
         Time remaining
       </span>
       <span aria-hidden>{formatDuration(safe)}</span>
