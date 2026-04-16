@@ -18,7 +18,9 @@
     "build:vercel-api": "npm run build -w @conductor/contracts && npm run build -w @conductor/auth && npm run build -w @conductor/platform && npm run build -w @conductor/database && npm run build -w @conductor/api",
     "typecheck": "npm run --workspaces typecheck",
     "lint": "npm run --workspaces lint",
-    "test": "npm run --workspaces --if-present test"
+    "test": "npm run --workspaces --if-present test",
+    "storybook": "npm run storybook --workspace=@conductor/ui",
+    "storybook:build": "npm run build-storybook --workspace=@conductor/ui"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
