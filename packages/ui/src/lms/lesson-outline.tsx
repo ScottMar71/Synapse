@@ -3,33 +3,11 @@
 import type { ComponentType, MouseEvent, ReactElement, ReactNode } from "react";
 
 import { cx } from "../internal/cx";
+import { DefaultLessonLink, formatDuration, lessonAriaLabel, typeMeta } from "./lesson-outline.shared";
+import type { LessonOutlineLesson, LessonOutlineModule } from "./lesson-outline.types";
 import styles from "./lesson-outline.module.css";
 
-export type LessonOutlineLessonType =
-  | "video"
-  | "reading"
-  | "quiz"
-  | "assignment"
-  | "scorm"
-  | "mixed";
-
-export type LessonOutlineLesson = {
-  id: string;
-  title: string;
-  lessonType: LessonOutlineLessonType;
-  durationMinutes?: number;
-  completed?: boolean;
-  current?: boolean;
-  href?: string;
-};
-
-export type LessonOutlineModule = {
-  id: string;
-  title: string;
-  lessons: LessonOutlineLesson[];
-  /** Expanded on first paint when no lesson in the module is `current` and this is true. */
-  defaultOpen?: boolean;
-};
+export type { LessonOutlineLesson, LessonOutlineLessonType, LessonOutlineModule } from "./lesson-outline.types";
 
 export type LessonOutlineProps = {
   modules: LessonOutlineModule[];
@@ -44,64 +22,6 @@ export type LessonOutlineProps = {
   /** Used when a lesson has no `href` (e.g. client-side only navigation). */
   onLessonActivate?: (lesson: LessonOutlineLesson) => void;
 };
-
-function typeMeta(type: LessonOutlineLessonType): { glyph: string; label: string } {
-  switch (type) {
-    case "video":
-      return { glyph: "▶", label: "Video" };
-    case "reading":
-      return { glyph: "¶", label: "Reading" };
-    case "quiz":
-      return { glyph: "?", label: "Quiz" };
-    case "assignment":
-      return { glyph: "✎", label: "Assignment" };
-    case "scorm":
-      return { glyph: "⬡", label: "SCORM" };
-    case "mixed":
-      return { glyph: "◆", label: "Mixed content" };
-    default:
-      return { glyph: "•", label: "Lesson" };
-  }
-}
-
-function DefaultLessonLink({
-  href,
-  className,
-  children,
-  "aria-current": ariaCurrent,
-  "aria-label": ariaLabel,
-}: {
-  href: string;
-  className?: string;
-  children: ReactNode;
-  "aria-current"?: "page" | boolean | undefined;
-  "aria-label"?: string;
-}): ReactElement {
-  return (
-    <a href={href} className={className} aria-current={ariaCurrent} aria-label={ariaLabel}>
-      {children}
-    </a>
-  );
-}
-
-function lessonAriaLabel(
-  lesson: LessonOutlineLesson,
-  typeLabel: string,
-  durationLabel: string | undefined,
-): string {
-  return [lesson.title, typeLabel, durationLabel, lesson.completed ? "Completed" : "Not completed"]
-    .filter(Boolean)
-    .join(". ");
-}
-
-function formatDuration(minutes: number): string {
-  if (minutes < 60) {
-    return `${minutes} min`;
-  }
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h} hr ${m} min` : `${h} hr`;
-}
 
 export function LessonOutline({
   modules,
@@ -143,7 +63,6 @@ export function LessonOutline({
                     const rowClass = cx(styles.lessonRow, current ? styles.lessonRowCurrent : undefined);
                     const mark = complete ? "✓" : "○";
                     const markClass = cx(styles.statusMark, complete ? styles.statusMarkDone : undefined);
-
                     const a11yLabel = lessonAriaLabel(lesson, typeLabel, durationLabel);
                     const inner = (
                       <>
