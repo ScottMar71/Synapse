@@ -1,5 +1,7 @@
 node_modules/
 .npm-cache/
+# local npm cache (optional; agents may use --cache ./.npm-cache when ~/.npm is not writable)
 dist/
 .next/
 *.tsbuildinfo
+**/storybook-static/
