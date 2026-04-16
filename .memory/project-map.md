@@ -5,7 +5,7 @@
 - `AGENTS.md`: repo-level operating rules for agents
 - `.memory/`: lightweight memory bank and workflow starters
 - `apps/`: runtime applications (`web` and `api`)
-- `packages/`: shared libraries (`contracts`, `platform`, `database`, `ui` — primitives `Button`, `Link`, `Badge`, `Card` in `packages/ui/src/primitives/`; `design-tokens` — DTCG JSON in `tokens/lms.tokens.json`, web runtime `tokens.css` imported from `apps/web/app/globals.css`)
+- `packages/`: shared libraries (`contracts`, `platform`, `database`, `ui` — primitives `Button`, `Link`, `Badge`, `Card`, form controls (`Input`, `PasswordInput`, `Textarea`, `Select`, `Checkbox`, `RadioGroup`/`Radio`, `Switch`, `FileUpload`) in `packages/ui/src/primitives/` + `FORM-PRIMITIVES.md`; `design-tokens` — DTCG JSON in `tokens/lms.tokens.json`, web runtime `tokens.css` imported from `apps/web/app/globals.css`)
 - `outcomes/`: reusable product requirement and outcome docs
 - `tickets/`: implementation tickets linked to outcomes
 

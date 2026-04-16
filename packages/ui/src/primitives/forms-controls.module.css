@@ -1,0 +1,115 @@
+/* Text-ish controls — lms-design-system §3.1 */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.label {
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+
+.requiredMark {
+  color: var(--color-status-error);
+  font-weight: var(--font-weight-semibold);
+}
+
+.hint {
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  font-family: var(--font-family-sans);
+  color: var(--color-text-muted);
+}
+
+.errorText {
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  font-family: var(--font-family-sans);
+  color: var(--color-status-error);
+}
+
+.textControl {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-height: calc(var(--size-touch-minimum) - 4px);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard);
+}
+
+.textControl::placeholder {
+  color: var(--color-text-muted);
+}
+
+.textControl:focus-visible {
+  outline: none;
+  border-color: var(--color-action-primary);
+  box-shadow: var(--shadow-focus);
+}
+
+.textControl[data-invalid="true"] {
+  border-color: var(--color-status-error);
+}
+
+.textControl:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+  background: var(--color-bg-muted);
+  border-color: var(--color-border-default);
+}
+
+.textControl[readonly] {
+  background: var(--color-bg-muted);
+  border-color: var(--color-border-default);
+  cursor: default;
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.inputRow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.inputRow .textControl {
+  flex: 1;
+  min-width: 0;
+}
+
+.passwordToggle {
+  flex-shrink: 0;
+  align-self: center;
+  white-space: nowrap;
+}
+
+.selectControl {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
+    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% - 2px),
+    calc(100% - 10px) calc(50% - 2px);
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  padding-inline-end: var(--space-7);
+}
