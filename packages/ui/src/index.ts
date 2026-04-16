@@ -94,6 +94,12 @@ export type {
 export { LessonOutline } from "./lms/lesson-outline";
 export type { LessonViewerLayoutProps, LessonViewerReadingMeasureProps } from "./lms/lesson-viewer-layout";
 export { LessonViewerLayout, LessonViewerReadingMeasure } from "./lms/lesson-viewer-layout";
+export type {
+  LessonNavigationModule,
+  LessonNavigationProps,
+  LessonNavigationTarget,
+} from "./lms/lesson-navigation";
+export { getAdjacentLessonsByModuleOrder, LessonNavigation } from "./lms/lesson-navigation";
 
 export type {
   CourseCardContext,
