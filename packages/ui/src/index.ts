@@ -96,6 +96,20 @@ export type { LessonViewerLayoutProps, LessonViewerReadingMeasureProps } from ".
 export { LessonViewerLayout, LessonViewerReadingMeasure } from "./lms/lesson-viewer-layout";
 
 export type {
+  CourseCardContext,
+  CourseCardPrimaryAction,
+  CourseCardProps,
+} from "./lms/course-card";
+export { CourseCard } from "./lms/course-card";
+export type { EnrollmentStripProps } from "./lms/enrollment-strip";
+export { EnrollmentStrip } from "./lms/enrollment-strip";
+export type {
+  ProgressTrackerChecklistItem,
+  ProgressTrackerProps,
+  ProgressTrackerVariant,
+} from "./lms/progress-tracker";
+export { ProgressTracker } from "./lms/progress-tracker";
+export type {
   DashboardNumericStat,
   DashboardNumericSummaryRowProps,
   ContinueLearningItem,
