@@ -1,12 +1,11 @@
 "use client";
 
 import type { ReactElement, ReactNode } from "react";
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 
+import { useBodyScrollLock } from "../internal/use-body-scroll-lock";
+import { useOverlayFocus } from "../internal/use-overlay-focus";
 import drawerStyles from "./patterns-drawer.module.css";
-
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export type MobileNavDrawerProps = {
   open: boolean;
@@ -22,77 +21,14 @@ export function MobileNavDrawer({ open, onClose, title, panelId, children }: Mob
   const panelRef = useRef<HTMLDivElement>(null);
   const lastFocusRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    lastFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const id = window.requestAnimationFrame(() => {
-      const root = panelRef.current;
-      if (!root) {
-        return;
-      }
-      const nodes = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-      nodes[0]?.focus();
-    });
-    return () => {
-      window.cancelAnimationFrame(id);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onKeyDown = (event: Event) => {
-      if (!(event instanceof KeyboardEvent)) {
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") {
-        return;
-      }
-      const root = panelRef.current;
-      if (!root) {
-        return;
-      }
-      const nodes = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-      if (nodes.length === 0) {
-        return;
-      }
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      if (event.shiftKey) {
-        if (document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        }
-      } else if (document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [onClose, open]);
-
-  useEffect(() => {
-    if (open) {
-      return;
-    }
-    const t = window.setTimeout(() => {
-      lastFocusRef.current?.focus?.();
-    }, 0);
-    return () => {
-      window.clearTimeout(t);
-    };
-  }, [open]);
+  useBodyScrollLock(open);
+  useOverlayFocus({
+    open,
+    rootRef: panelRef,
+    lastFocusRef,
+    escapeDismisses: true,
+    onEscape: onClose,
+  });
 
   if (!open) {
     return null;
