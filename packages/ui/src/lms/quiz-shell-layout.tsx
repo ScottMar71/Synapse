@@ -7,6 +7,8 @@ import styles from "./quiz-shell.module.css";
 
 export type QuizShellProps = {
   title: string;
+  /** Use `3` when the shell sits under a page-level `h2` (e.g. course view) to preserve heading order. */
+  titleHeadingLevel?: 2 | 3;
   description?: ReactNode;
   /** Optional timer node — use `QuizTimer` or pass `null` to omit. */
   timer?: ReactNode;
@@ -21,6 +23,7 @@ export type QuizShellProps = {
 
 export function QuizShell({
   title,
+  titleHeadingLevel = 2,
   description,
   timer,
   questionNav,
@@ -32,14 +35,15 @@ export function QuizShell({
 }: QuizShellProps): ReactElement {
   const errId = useId();
   const titleId = useId();
+  const TitleTag = titleHeadingLevel === 3 ? "h3" : "h2";
 
   return (
     <section className={cx(styles.root, className)} aria-labelledby={titleId}>
       <div className={styles.header}>
         <div className={styles.titleBlock}>
-          <h2 id={titleId} className={styles.title}>
+          <TitleTag id={titleId} className={styles.title}>
             {title}
-          </h2>
+          </TitleTag>
           {description ? <div className={styles.description}>{description}</div> : null}
         </div>
         {timer ?? null}
@@ -49,13 +53,7 @@ export function QuizShell({
 
       <QuizValidationErrors id={errId} errors={validationErrors} />
 
-      <div
-        className={styles.body}
-        aria-invalid={validationErrors.length > 0 ? true : undefined}
-        aria-describedby={validationErrors.length > 0 ? errId : undefined}
-      >
-        {children}
-      </div>
+      <div className={styles.body}>{children}</div>
 
       {actions ?? null}
 

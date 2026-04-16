@@ -58,6 +58,7 @@ export function CourseAssessmentPanel({
   return (
     <QuizShell
       title="Assessment"
+      titleHeadingLevel={3}
       description="Enter an assessment identifier from your tenant (for example from seed data) to exercise draft and submit flows."
       timer={<QuizTimer secondsRemaining={secondsRemaining} warnBelowSeconds={60} />}
       questionNav={
@@ -70,7 +71,7 @@ export function CourseAssessmentPanel({
           }}
         />
       }
-      validationErrors={validationErrors}
+      validationErrors={[]}
       actions={
         <QuizActionBar
           onSaveDraft={() => {
@@ -87,6 +88,7 @@ export function CourseAssessmentPanel({
       <Input
         label="Assessment ID"
         hint="Used with the LMS submissions API for this demo flow."
+        error={validationErrors[0]}
         value={assessmentId}
         onChange={(e) => {
           setValidationErrors([]);
