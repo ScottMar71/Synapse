@@ -1,0 +1,116 @@
+/* Lesson viewer — lms-design-system §3.2 (breadcrumb, main, outline sidebar desktop, next lesson mobile, reading measure) */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  font-family: var(--font-family-sans);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  line-height: var(--line-height-h2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .body {
+    grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+}
+
+.outlineAside {
+  display: none;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+
+@media (min-width: 1024px) {
+  .outlineAside {
+    display: block;
+    position: sticky;
+    top: var(--space-4);
+    max-height: calc(100vh - var(--space-8));
+    overflow: auto;
+  }
+}
+
+.mainColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.nextLessonMobile {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .nextLessonMobile {
+    display: none;
+  }
+}
+
+.nextLessonLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--size-touch-minimum);
+  box-sizing: border-box;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-sans);
+  text-decoration: none;
+  color: var(--color-text-inverse);
+  background: var(--color-action-primary);
+  border: 1px solid transparent;
+}
+
+.nextLessonLink:hover {
+  background: var(--color-action-primary-hover);
+}
+
+.nextLessonLink:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.mainLandmark {
+  min-width: 0;
+}
+
+/**
+ * Reading measure ~65ch per lms-design-system §3.2 Lesson viewer.
+ * Apply to the primary text / reading column (video players may sit in a wider wrapper above this region).
+ */
+.readingMeasure {
+  max-width: 65ch;
+  width: 100%;
+}
