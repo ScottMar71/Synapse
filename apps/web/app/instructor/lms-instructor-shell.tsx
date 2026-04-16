@@ -1,9 +1,10 @@
 "use client";
 
+import { AppHeader, Button, isNavigationActive, PageShell, ResponsiveNav } from "@conductor/ui";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactElement, ReactNode } from "react";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 
 import { clearSession } from "../../lib/lms-session";
 
@@ -11,81 +12,66 @@ type LmsInstructorShellProps = {
   children: ReactNode;
 };
 
+function NextNavLink({
+  href,
+  className,
+  children,
+  onClick,
+}: {
+  href: string;
+  className?: string;
+  children: ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <Link href={href} className={className} onClick={onClick}>
+      {children}
+    </Link>
+  );
+}
+
 export function LmsInstructorShell({ children }: LmsInstructorShellProps): ReactElement {
   const router = useRouter();
+  const pathname = usePathname() ?? "";
 
   const signOut = useCallback(() => {
     clearSession();
     router.replace("/sign-in");
   }, [router]);
 
+  const navItems = useMemo(() => {
+    const onReports = pathname.startsWith("/instructor/reports");
+    return [
+      {
+        href: "/instructor",
+        label: "Overview",
+        active: !onReports && isNavigationActive(pathname, "/instructor"),
+      },
+      { href: "/instructor/reports", label: "Reports", active: onReports },
+      { href: "/", label: "Home", active: pathname === "/" },
+    ];
+  }, [pathname]);
+
   return (
-    <div className="page-container">
-      <a
-        href="#instructor-main"
-        style={{
-          position: "absolute",
-          left: "-9999px",
-          zIndex: 999,
-          padding: "var(--space-2)",
-          background: "var(--color-surface)",
-          border: "1px solid var(--color-border)"
-        }}
-        onFocus={(e) => {
-          e.currentTarget.style.left = "var(--space-4)";
-        }}
-        onBlur={(e) => {
-          e.currentTarget.style.left = "-9999px";
-        }}
-      >
-        Skip to content
-      </a>
-      <header
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: "var(--space-4)",
-          marginBottom: "var(--space-6)"
-        }}
-      >
-        <div>
-          <h1 style={{ margin: "0 0 var(--space-2)", fontSize: "1.25rem" }}>Instructor</h1>
-          <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "0.875rem" }}>
-            Learners and catalog overview
-          </p>
-        </div>
-        <nav aria-label="Instructor navigation" style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)" }}>
-          <Link href="/instructor" style={{ fontWeight: 600, fontSize: "0.875rem" }}>
-            Overview
-          </Link>
-          <Link href="/instructor/reports" style={{ fontWeight: 600, fontSize: "0.875rem" }}>
-            Reports
-          </Link>
-          <Link href="/" style={{ fontWeight: 600, fontSize: "0.875rem" }}>
-            Home
-          </Link>
-          <button
-            type="button"
-            onClick={signOut}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              font: "inherit",
-              color: "var(--color-primary)",
-              fontWeight: 600,
-              fontSize: "0.875rem",
-              cursor: "pointer",
-              textDecoration: "underline"
-            }}
-          >
-            Sign out
-          </button>
-        </nav>
-      </header>
-      <main id="instructor-main">{children}</main>
-    </div>
+    <PageShell
+      mainId="instructor-main"
+      header={
+        <AppHeader title="Instructor" description="Learners and catalog overview">
+          <>
+            <ResponsiveNav
+              aria-label="Instructor navigation"
+              drawerTitle="Instructor"
+              items={navItems}
+              LinkComponent={NextNavLink}
+            />
+            <Button type="button" variant="tertiary" size="sm" onClick={signOut}>
+              Sign out
+            </Button>
+          </>
+        </AppHeader>
+      }
+    >
+      {children}
+    </PageShell>
   );
 }

@@ -25,42 +25,42 @@ export function AdminSignInRequired(props: { context: string }): ReactElement {
   const href = signInHref(pathname, qs);
 
   return (
-    <main className={styles.stateShell}>
+    <div className={styles.stateShell}>
       <p className={styles.muted}>
         Sign in from the{" "}
         <Link href={href}>sign-in page</Link> to {props.context}.
       </p>
-    </main>
+    </div>
   );
 }
 
 export function AdminLoading(props: { label: string }): ReactElement {
   return (
-    <main className={styles.stateShell} aria-busy="true" aria-live="polite">
+    <div className={styles.stateShell} aria-busy="true" aria-live="polite">
       <p>{props.label}</p>
-    </main>
+    </div>
   );
 }
 
 export function AdminLoadError(props: { error: ApiError; onRetry: () => void }): ReactElement {
   return (
-    <main className={styles.stateShell}>
+    <div className={styles.stateShell}>
       <p role="alert">{formatTenantAdminError(props.error)}</p>
       <button type="button" className={styles.retryBtn} onClick={() => props.onRetry()}>
         Retry
       </button>
-    </main>
+    </div>
   );
 }
 
 export function AdminStaffForbidden(): ReactElement {
   return (
-    <main className={styles.stateShell}>
+    <div className={styles.stateShell}>
       <p role="alert">You need instructor or admin access for this section.</p>
       <p className={styles.muted} style={{ marginTop: "var(--space-3)" }}>
         Sign in with a staff account for this tenant, or go back to{" "}
         <Link href="/learn">learner home</Link>.
       </p>
-    </main>
+    </div>
   );
 }

@@ -4,8 +4,8 @@ import { ProgressReportsClient } from "../../instructor/reports/progress-reports
 
 export default function AdminProgressReportsPage(): ReactElement {
   return (
-    <main className="page-container">
+    <div className="page-container">
       <ProgressReportsClient variant="admin" />
-    </main>
+    </div>
   );
 }

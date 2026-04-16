@@ -1,0 +1,154 @@
+/* Nav links, sidebar list, breadcrumb, tabs */
+
+.navList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.navListVertical {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.navLink {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-action-primary);
+  text-decoration: none;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  min-height: var(--size-touch-minimum);
+  display: inline-flex;
+  align-items: center;
+}
+
+.navLink:hover {
+  color: var(--color-action-primary-hover);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.navLink:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.navLinkActive {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.navLinkActive:hover {
+  color: var(--color-text-primary);
+}
+
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-3);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sidebarNavCollapsed {
+  padding-inline: var(--space-2);
+}
+
+.sidebarLinkList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.sidebarToggle {
+  align-self: flex-end;
+  margin-bottom: var(--space-2);
+}
+
+.sidebarLink {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body-sm);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-sm);
+  min-height: var(--size-touch-minimum);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sidebarLink:hover {
+  background: var(--color-bg-subtle);
+}
+
+.sidebarLink:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.sidebarLinkActive {
+  background: color-mix(in srgb, var(--color-action-primary) 10%, var(--color-bg-surface));
+  color: var(--color-action-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sidebarLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breadcrumbNav {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-body-sm);
+}
+
+.breadcrumbList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.breadcrumbItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.breadcrumbSep {
+  color: var(--color-text-muted);
+  user-select: none;
+}
+
+.breadcrumbCurrent {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.breadcrumbLink {
+  color: var(--color-action-primary);
+  text-decoration: none;
+}
+
+.breadcrumbLink:hover {
+  text-decoration: underline;
+}

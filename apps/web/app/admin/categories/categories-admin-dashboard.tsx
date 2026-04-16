@@ -367,7 +367,7 @@ export function CategoriesAdminDashboard({
 
   if (categories.length === 0) {
     return (
-      <main className={styles.shell}>
+      <div className={styles.shell}>
         <div className={styles.topBar}>
           <h1 className={styles.titleRow}>Course categories</h1>
         </div>
@@ -390,23 +390,23 @@ export function CategoriesAdminDashboard({
             Create
           </button>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (initialCategoryId && !selected) {
     return (
-      <main className={styles.shell}>
+      <div className={styles.shell}>
         <p>Category not found.</p>
         <Link href="/admin/categories">Back to categories</Link>
-      </main>
+      </div>
     );
   }
 
   const linkableCourses = allCourses.filter((c) => !coursesInCategory.some((x) => x.id === c.id));
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <div className={styles.topBar}>
         <h1 className={styles.titleRow}>
           Course categories{" "}
@@ -605,6 +605,6 @@ export function CategoriesAdminDashboard({
           )}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

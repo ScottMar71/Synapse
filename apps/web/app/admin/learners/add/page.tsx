@@ -86,7 +86,7 @@ export default function AddLearnerPage(): ReactElement {
 
   if (!isAdmin) {
     return (
-      <main className={styles.shell}>
+      <div className={styles.shell}>
         <Link href="/admin/learners" className={styles.backLink}>
           ← Back to Learners
         </Link>
@@ -100,12 +100,12 @@ export default function AddLearnerPage(): ReactElement {
             Back to directory
           </Link>
         </p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <Link href="/admin/learners" className={styles.backLink}>
         ← Back to Learners
       </Link>
@@ -188,6 +188,6 @@ export default function AddLearnerPage(): ReactElement {
           </div>
         </div>
       </form>
-    </main>
+    </div>
   );
 }

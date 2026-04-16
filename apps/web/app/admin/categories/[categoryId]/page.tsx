@@ -12,9 +12,9 @@ export default async function AdminCategoryDetailPage(props: PageProps): Promise
   return (
     <Suspense
       fallback={
-        <main className="page-container">
+        <div className="page-container">
           <p aria-busy="true">Loading…</p>
-        </main>
+        </div>
       }
     >
       <CategoriesAdminDashboard initialCategoryId={categoryId} />

@@ -85,7 +85,7 @@ export function LearnersAdminDashboard(): ReactElement {
   }
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <div className={styles.topBar}>
         <h1 className={styles.titleRow}>
           Learners{" "}
@@ -171,6 +171,6 @@ export function LearnersAdminDashboard(): ReactElement {
           </tbody>
         </table>
       </div>
-    </main>
+    </div>
   );
 }
