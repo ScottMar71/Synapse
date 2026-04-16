@@ -1,0 +1,16 @@
+{
+  "name": "@conductor/design-tokens",
+  "private": true,
+  "version": "0.1.0",
+  "description": "LMS design tokens (W3C DTCG JSON) for Style Dictionary and similar pipelines",
+  "type": "module",
+  "exports": {
+    ".": "./tokens/lms.tokens.json",
+    "./tokens": "./tokens/lms.tokens.json",
+    "./tokens.css": "./tokens.css"
+  },
+  "files": [
+    "tokens",
+    "tokens.css"
+  ]
+}

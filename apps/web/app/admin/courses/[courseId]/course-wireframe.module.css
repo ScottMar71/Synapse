@@ -334,7 +334,7 @@
   position: relative;
   border: 2px dashed var(--color-border-strong);
   border-radius: var(--radius-md);
-  padding: var(--space-8);
+  padding: var(--space-7);
   text-align: center;
   background: var(--color-surface-muted);
 }

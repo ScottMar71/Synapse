@@ -1,0 +1,114 @@
+/**
+ * LMS semantic design tokens — runtime source of truth for `apps/web`.
+ * Logical names follow Conductor knowledge `lms-design-system` §2 (e.g. color.bg.canvas → --color-bg-canvas).
+ * Authoring / tooling source: `tokens/lms.tokens.json` (W3C DTCG).
+ *
+ * Disabled controls (§4): pair reduced opacity + `color.bg.muted` with `color.border.default` so fields
+ * stay distinct from canvas; `pointer-events` / `aria-disabled` handled in components.
+ */
+
+:root {
+  /* —— Color (semantic) —— */
+  --color-bg-canvas: #f9fafb;
+  --color-bg-surface: #ffffff;
+  --color-bg-subtle: #f3f4f6;
+  --color-bg-muted: #f3f4f6;
+  --color-border-default: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-text-primary: #111827;
+  --color-text-secondary: #374151;
+  --color-text-muted: #6b7280;
+  --color-text-inverse: #ffffff;
+  --color-action-primary: #2563eb;
+  --color-action-primary-hover: #1d4ed8;
+  --color-action-destructive: #dc2626;
+  --color-focus-ring: rgba(37, 99, 235, 0.4);
+  --color-status-success: #16a34a;
+  --color-status-warning: #f59e0b;
+  --color-status-error: #dc2626;
+
+  /* —— Spacing: space.0 … space.10 (4px base, 11 steps) —— */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+
+  /* —— Radius —— */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* —— Shadows (§2.6) —— */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+  --shadow-focus: 0 0 0 3px var(--color-focus-ring);
+
+  /* —— Motion —— */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* —— Z-index —— */
+  --z-base: 0;
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-modal-backdrop: 1200;
+  --z-modal: 1210;
+  --z-toast: 1300;
+
+  /* —— Typography —— */
+  --font-family-sans: ui-sans-serif, system-ui, "Segoe UI", roboto, "Helvetica Neue", arial, sans-serif;
+  --font-family-mono: ui-monospace, sfmono-regular, menlo, monospace;
+  --font-size-display: 32px;
+  --font-size-h1: 28px;
+  --font-size-h2: 22px;
+  --font-size-h3: 18px;
+  --font-size-body: 16px;
+  --font-size-body-sm: 14px;
+  --font-size-caption: 12px;
+  --line-height-display: 40px;
+  --line-height-h1: 36px;
+  --line-height-h2: 30px;
+  --line-height-h3: 24px;
+  --line-height-body: 24px;
+  --line-height-body-sm: 20px;
+  --line-height-caption: 16px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* —— Sizes —— */
+  --size-touch-minimum: 44px;
+  --size-modal-width-sm: 400px;
+  --size-modal-width-md: 560px;
+  --size-modal-width-lg: 720px;
+  --size-modal-max-vw: 90vw;
+  --size-reading-max-ch: 65ch;
+
+  /* —— Legacy aliases (pre-token variable names in apps/web) —— */
+  --color-surface: var(--color-bg-surface);
+  --color-surface-muted: var(--color-bg-subtle);
+  --color-border: var(--color-border-default);
+  --color-text: var(--color-text-primary);
+  --color-primary: var(--color-action-primary);
+  --color-primary-muted: #dbeafe;
+  --color-danger: var(--color-status-error);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0.01ms;
+    --duration-base: 0.01ms;
+    --duration-slow: 0.01ms;
+  }
+}

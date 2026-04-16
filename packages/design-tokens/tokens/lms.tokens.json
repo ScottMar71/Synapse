@@ -1,0 +1,281 @@
+{
+  "$schema": "https://design-tokens.github.io/format/v1/schemas/design-tokens.schema.json",
+  "$description": "LMS design tokens — aligned to Conductor knowledge lms-design-system (v3). Suitable for Style Dictionary / DTCG pipelines.",
+  "color": {
+    "primitive": {
+      "gray": {
+        "50": { "$type": "color", "$value": "#F9FAFB", "$description": "Canvas / page background base" },
+        "100": { "$type": "color", "$value": "#F3F4F6", "$description": "Subtle surfaces, disabled field fill" },
+        "200": { "$type": "color", "$value": "#E5E7EB", "$description": "Default borders" },
+        "300": { "$type": "color", "$value": "#D1D5DB", "$description": "Strong borders" },
+        "500": { "$type": "color", "$value": "#6B7280", "$description": "Meta, placeholders" },
+        "700": { "$type": "color", "$value": "#374151", "$description": "Secondary text" },
+        "900": { "$type": "color", "$value": "#111827", "$description": "Headings" },
+        "950": { "$type": "color", "$value": "#0B0F14", "$description": "Near-black" }
+      },
+      "white": { "$type": "color", "$value": "#FFFFFF", "$description": "Cards, default input surface" },
+      "blue": {
+        "600": { "$type": "color", "$value": "#2563EB", "$description": "Primary actions" },
+        "700": { "$type": "color", "$value": "#1D4ED8", "$description": "Primary hover" }
+      },
+      "green": {
+        "600": { "$type": "color", "$value": "#16A34A", "$description": "Success" }
+      },
+      "amber": {
+        "500": { "$type": "color", "$value": "#F59E0B", "$description": "Warning" }
+      },
+      "red": {
+        "600": { "$type": "color", "$value": "#DC2626", "$description": "Error / destructive" }
+      }
+    },
+    "bg": {
+      "canvas": {
+        "$type": "color",
+        "$value": "{color.primitive.gray.50}",
+        "$description": "App / page background"
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "{color.primitive.white}",
+        "$description": "Cards, panels, inputs (default)"
+      },
+      "subtle": {
+        "$type": "color",
+        "$value": "{color.primitive.gray.100}",
+        "$description": "Inset strips, zebra, grouped regions"
+      },
+      "muted": {
+        "$type": "color",
+        "$value": "{color.primitive.gray.100}",
+        "$description": "Disabled / read-only controls — pair with border.default in UI"
+      }
+    },
+    "border": {
+      "default": {
+        "$type": "color",
+        "$value": "{color.primitive.gray.200}",
+        "$description": "Hairlines"
+      },
+      "strong": {
+        "$type": "color",
+        "$value": "{color.primitive.gray.300}",
+        "$description": "Emphasis borders"
+      }
+    },
+    "text": {
+      "primary": {
+        "$type": "color",
+        "$value": "{color.primitive.gray.900}",
+        "$description": "Primary reading"
+      },
+      "secondary": {
+        "$type": "color",
+        "$value": "{color.primitive.gray.700}",
+        "$description": "Supporting text"
+      },
+      "muted": {
+        "$type": "color",
+        "$value": "{color.primitive.gray.500}",
+        "$description": "Meta"
+      },
+      "inverse": {
+        "$type": "color",
+        "$value": "{color.primitive.white}",
+        "$description": "On primary buttons"
+      }
+    },
+    "action": {
+      "primary": {
+        "$type": "color",
+        "$value": "{color.primitive.blue.600}",
+        "$description": "Primary actions"
+      },
+      "primary-hover": {
+        "$type": "color",
+        "$value": "{color.primitive.blue.700}",
+        "$description": "Primary hover"
+      },
+      "destructive": {
+        "$type": "color",
+        "$value": "{color.primitive.red.600}",
+        "$description": "Destructive actions"
+      }
+    },
+    "focus": {
+      "ring": {
+        "$type": "color",
+        "$value": "#2563EB66",
+        "$description": "Focus ring — blue-600 @ ~40% alpha (use with shadow.focus spread)"
+      }
+    },
+    "status": {
+      "success": {
+        "$type": "color",
+        "$value": "{color.primitive.green.600}",
+        "$description": "Success"
+      },
+      "warning": {
+        "$type": "color",
+        "$value": "{color.primitive.amber.500}",
+        "$description": "Warning"
+      },
+      "error": {
+        "$type": "color",
+        "$value": "{color.primitive.red.600}",
+        "$description": "Error"
+      }
+    }
+  },
+  "spacing": {
+    "scale": {
+      "0": { "$type": "dimension", "$value": "0px", "$description": "space.0" },
+      "1": { "$type": "dimension", "$value": "4px", "$description": "space.1" },
+      "2": { "$type": "dimension", "$value": "8px", "$description": "space.2" },
+      "3": { "$type": "dimension", "$value": "12px", "$description": "space.3" },
+      "4": { "$type": "dimension", "$value": "16px", "$description": "space.4" },
+      "5": { "$type": "dimension", "$value": "20px", "$description": "space.5" },
+      "6": { "$type": "dimension", "$value": "24px", "$description": "space.6" },
+      "7": { "$type": "dimension", "$value": "32px", "$description": "space.7" },
+      "8": { "$type": "dimension", "$value": "40px", "$description": "space.8" },
+      "9": { "$type": "dimension", "$value": "48px", "$description": "space.9" },
+      "10": { "$type": "dimension", "$value": "64px", "$description": "space.10 — 4px-base scale end" }
+    }
+  },
+  "radius": {
+    "sm": { "$type": "dimension", "$value": "6px", "$description": "Inputs, chips" },
+    "md": { "$type": "dimension", "$value": "10px", "$description": "Buttons, cards" },
+    "lg": { "$type": "dimension", "$value": "14px", "$description": "Modals, large panels" },
+    "full": { "$type": "dimension", "$value": "9999px", "$description": "Avatars, pills" }
+  },
+  "shadow": {
+    "sm": {
+      "$type": "shadow",
+      "$value": {
+        "offsetX": "0px",
+        "offsetY": "1px",
+        "blur": "2px",
+        "spread": "0px",
+        "color": "#0F172A0F"
+      },
+      "$description": "rgba(15,23,42,0.06) approximate"
+    },
+    "md": {
+      "$type": "shadow",
+      "$value": {
+        "offsetX": "0px",
+        "offsetY": "4px",
+        "blur": "12px",
+        "spread": "0px",
+        "color": "#0F172A14"
+      },
+      "$description": "rgba(15,23,42,0.08) approximate"
+    },
+    "lg": {
+      "$type": "shadow",
+      "$value": {
+        "offsetX": "0px",
+        "offsetY": "12px",
+        "blur": "32px",
+        "spread": "0px",
+        "color": "#0F172A1F"
+      },
+      "$description": "rgba(15,23,42,0.12) approximate"
+    },
+    "focus": {
+      "$type": "shadow",
+      "$value": {
+        "offsetX": "0px",
+        "offsetY": "0px",
+        "blur": "0px",
+        "spread": "3px",
+        "color": "#2563EB66"
+      },
+      "$description": "0 0 0 3px focus ring using color.focus.ring"
+    }
+  },
+  "duration": {
+    "fast": { "$type": "duration", "$value": "120ms" },
+    "base": { "$type": "duration", "$value": "200ms" },
+    "slow": { "$type": "duration", "$value": "320ms" }
+  },
+  "easing": {
+    "standard": {
+      "$type": "cubicBezier",
+      "$value": [0.2, 0, 0, 1],
+      "$description": "cubic-bezier(0.2, 0, 0, 1)"
+    }
+  },
+  "zIndex": {
+    "base": { "$type": "number", "$value": 0 },
+    "dropdown": { "$type": "number", "$value": 1000 },
+    "sticky": { "$type": "number", "$value": 1100 },
+    "modal-backdrop": { "$type": "number", "$value": 1200 },
+    "modal": { "$type": "number", "$value": 1210 },
+    "toast": { "$type": "number", "$value": 1300 }
+  },
+  "font": {
+    "family": {
+      "sans": {
+        "$type": "fontFamily",
+        "$value": [
+          "ui-sans-serif",
+          "system-ui",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica Neue",
+          "Arial",
+          "sans-serif"
+        ],
+        "$description": "Default UI stack"
+      },
+      "mono": {
+        "$type": "fontFamily",
+        "$value": ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        "$description": "Code, IDs"
+      }
+    },
+    "size": {
+      "display": { "$type": "dimension", "$value": "32px" },
+      "h1": { "$type": "dimension", "$value": "28px" },
+      "h2": { "$type": "dimension", "$value": "22px" },
+      "h3": { "$type": "dimension", "$value": "18px" },
+      "body": { "$type": "dimension", "$value": "16px" },
+      "body-sm": { "$type": "dimension", "$value": "14px" },
+      "caption": { "$type": "dimension", "$value": "12px" }
+    },
+    "lineHeight": {
+      "display": { "$type": "dimension", "$value": "40px" },
+      "h1": { "$type": "dimension", "$value": "36px" },
+      "h2": { "$type": "dimension", "$value": "30px" },
+      "h3": { "$type": "dimension", "$value": "24px" },
+      "body": { "$type": "dimension", "$value": "24px" },
+      "body-sm": { "$type": "dimension", "$value": "20px" },
+      "caption": { "$type": "dimension", "$value": "16px" }
+    },
+    "weight": {
+      "regular": { "$type": "fontWeight", "$value": 400 },
+      "medium": { "$type": "fontWeight", "$value": 500 },
+      "semibold": { "$type": "fontWeight", "$value": 600 }
+    }
+  },
+  "size": {
+    "touch": {
+      "minimum": {
+        "$type": "dimension",
+        "$value": "44px",
+        "$description": "Minimum hit target (learner primary actions)"
+      }
+    },
+    "modal": {
+      "width": {
+        "sm": { "$type": "dimension", "$value": "400px" },
+        "md": { "$type": "dimension", "$value": "560px" },
+        "lg": { "$type": "dimension", "$value": "720px" },
+        "max-vw": { "$type": "dimension", "$value": "90vw", "$description": "max modal width" }
+      }
+    },
+    "reading": {
+      "max-ch": { "$type": "number", "$value": 65, "$description": "Comfortable measure for lesson reading (ch)" }
+    }
+  }
+}

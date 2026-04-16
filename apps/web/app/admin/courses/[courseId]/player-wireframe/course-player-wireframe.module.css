@@ -58,7 +58,7 @@
 .outline {
   position: sticky;
   top: var(--space-4);
-  max-height: calc(100vh - var(--space-8));
+  max-height: calc(100vh - var(--space-7));
   overflow: auto;
   padding: var(--space-4);
   background: var(--color-surface);
