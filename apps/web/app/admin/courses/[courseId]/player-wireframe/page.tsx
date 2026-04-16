@@ -12,7 +12,7 @@ export default async function CoursePlayerWireframePage({ params }: PlayerWirefr
   const { courseId } = await params;
 
   return (
-    <main className="page-container">
+    <div className="page-container">
       <header className="page-header">
         <nav aria-label="Breadcrumb">
           <ol className={styles.breadcrumb}>
@@ -41,6 +41,6 @@ export default async function CoursePlayerWireframePage({ params }: PlayerWirefr
       <div className="page-content">
         <CoursePlayerWireframe courseId={courseId} />
       </div>
-    </main>
+    </div>
   );
 }

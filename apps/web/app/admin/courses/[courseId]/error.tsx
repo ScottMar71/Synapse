@@ -12,7 +12,7 @@ export default function AdminCourseError({
   reset
 }: AdminCourseErrorProps): ReactElement {
   return (
-    <main className="page-container">
+    <div className="page-container">
       <h1 style={{ fontSize: "1.25rem", margin: "0 0 var(--space-3)" }}>
         This course page could not be rendered
       </h1>
@@ -31,6 +31,6 @@ export default function AdminCourseError({
       >
         Try again
       </button>
-    </main>
+    </div>
   );
 }

@@ -1,0 +1,50 @@
+/* Tabs — lms-design-system §3.1 */
+
+.tabList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border-default);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.tab {
+  margin: 0;
+}
+
+.tabButton {
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  min-height: var(--size-touch-minimum);
+}
+
+.tabButton:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-subtle);
+}
+
+.tabButton:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.tabButtonSelected {
+  color: var(--color-action-primary);
+  border-bottom-color: var(--color-action-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.tabPanel {
+  outline: none;
+}

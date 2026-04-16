@@ -7,9 +7,9 @@ export default function AdminLearnersPage(): ReactElement {
   return (
     <Suspense
       fallback={
-        <main className="page-container">
+        <div className="page-container">
           <p aria-busy="true">Loading…</p>
-        </main>
+        </div>
       }
     >
       <LearnersAdminDashboard />

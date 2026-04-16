@@ -185,7 +185,7 @@ export function CoursePlayerWireframe({ courseId }: CoursePlayerWireframeProps):
           ))}
         </nav>
 
-        <main className={styles.stage} aria-labelledby="wireframe-lesson-title">
+        <div className={styles.stage} aria-labelledby="wireframe-lesson-title">
           {activeLesson ? (
             <>
               <h2 id="wireframe-lesson-title" className={styles.lessonHeader}>
@@ -255,7 +255,7 @@ export function CoursePlayerWireframe({ courseId }: CoursePlayerWireframeProps):
           ) : (
             <p role="status">Select a lesson from the outline.</p>
           )}
-        </main>
+        </div>
       </div>
     </div>
   );

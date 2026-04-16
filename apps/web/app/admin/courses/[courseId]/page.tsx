@@ -13,7 +13,7 @@ export default async function AdminCoursePage({ params }: AdminCoursePageProps):
   const { courseId } = await params;
 
   return (
-    <main className="page-container">
+    <div className="page-container">
       <header className="page-header">
         <nav aria-label="Breadcrumb">
           <ol className={styles.breadcrumb}>
@@ -57,6 +57,6 @@ export default async function AdminCoursePage({ params }: AdminCoursePageProps):
           <CourseEditorWorkspace courseId={courseId} />
         </Suspense>
       </div>
-    </main>
+    </div>
   );
 }
