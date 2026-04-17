@@ -50,6 +50,7 @@ export type { TooltipProps } from "./primitives/tooltip";
 export { Tooltip } from "./primitives/tooltip";
 
 export type {
+  VideoCaptionTrack,
   VideoPlayTracking,
   VideoPlayerHandle,
   VideoPlayerProps,
