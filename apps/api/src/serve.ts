@@ -1,8 +1,9 @@
 import { serve } from "@hono/node-server";
 
-import { createNoopPlatformAdapters } from "@conductor/platform";
+import { createNoopPlatformAdapters, mergePlatformAdapters } from "@conductor/platform";
 
 import { buildApp } from "./build-app";
+import { createS3CompatibleStorageAdapter, readS3CompatibleStorageConfigFromEnv } from "./object-storage";
 
 /**
  * Parses development-only bearer tokens: `dev|<tenantId>|<userId>`.
@@ -23,7 +24,12 @@ function parseDevBearerToken(token: string): { userId: string; tenantId: string 
   return { tenantId, userId };
 }
 
-const adapters = createNoopPlatformAdapters();
+const baseAdapters = createNoopPlatformAdapters();
+const s3Config = readS3CompatibleStorageConfigFromEnv();
+const adapters = s3Config
+  ? mergePlatformAdapters(baseAdapters, { storage: createS3CompatibleStorageAdapter(s3Config) })
+  : baseAdapters;
+
 const app = buildApp({
   adapters: {
     ...adapters,

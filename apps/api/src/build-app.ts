@@ -12,6 +12,10 @@ import {
   enrollmentDtoSchema,
   learnerProvisionBodySchema,
   learnerSummarySchema,
+  lessonFileAttachmentDtoSchema,
+  lessonFileDownloadDtoSchema,
+  lessonFileUploadInitBodySchema,
+  lessonFileUploadInstructionSchema,
   lessonGlossaryCreateBodySchema,
   lessonGlossaryEntryDtoSchema,
   lessonGlossaryPatchBodySchema,
@@ -36,14 +40,18 @@ import {
   getCourseForViewer,
   createLessonGlossaryEntry,
   getActiveMembershipRoles,
+  getLessonFileDownloadForViewer,
   getLessonReadingForViewer,
+  initLessonFileUploadForStaff,
   listCourseCategoriesForTenant,
   listCoursesForTenant,
   listCoursesInCategory,
   listEnrollmentsForUser,
   listLearnersForTenant,
   listCourseLessonOutlineForStaff,
+  listLessonFileAttachmentsForViewer,
   listLessonGlossaryEntriesForViewer,
+  MAX_LESSON_FILE_BYTES,
   patchLessonGlossaryEntryForStaff,
   listProgressForUser,
   listPublishedCoursesForTenant,
@@ -154,6 +162,9 @@ type DataAccess = {
   createLessonGlossaryEntry: typeof createLessonGlossaryEntry;
   patchLessonGlossaryEntryForStaff: typeof patchLessonGlossaryEntryForStaff;
   archiveLessonGlossaryEntryForStaff: typeof archiveLessonGlossaryEntryForStaff;
+  initLessonFileUploadForStaff: typeof initLessonFileUploadForStaff;
+  listLessonFileAttachmentsForViewer: typeof listLessonFileAttachmentsForViewer;
+  getLessonFileDownloadForViewer: typeof getLessonFileDownloadForViewer;
   getProgressReportSummary: typeof getProgressReportSummary;
   listProgressReportRows: typeof listProgressReportRows;
 };
@@ -222,6 +233,9 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     createLessonGlossaryEntry,
     patchLessonGlossaryEntryForStaff,
     archiveLessonGlossaryEntryForStaff,
+    initLessonFileUploadForStaff,
+    listLessonFileAttachmentsForViewer,
+    getLessonFileDownloadForViewer,
     getProgressReportSummary,
     listProgressReportRows,
     ...dependencies.dataAccess
@@ -315,6 +329,10 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
 
   const tenantCourseLessonGlossaryEntryParams = tenantCourseLessonParams.extend({
     entryId: z.string().min(1).openapi({ param: { name: "entryId", in: "path" } })
+  });
+
+  const tenantCourseLessonFileParams = tenantCourseLessonParams.extend({
+    fileId: z.string().min(1).openapi({ param: { name: "fileId", in: "path" } })
   });
 
   const dataEnvelope = <T extends z.ZodType>(schema: T) =>
@@ -811,6 +829,201 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       resource: { courseId, lessonId, entryId }
     });
     return c.json({ data: { archived: true as const } }, 200);
+  });
+
+  const listLessonFilesRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/files`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description:
+          "Lesson file metadata. Use GET .../files/{fileId}/download for a short-lived signed URL.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ attachments: z.array(lessonFileAttachmentDtoSchema) }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(listLessonFilesRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.listLessonFileAttachmentsForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_FILE_LIST_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, resultCount: result.attachments.length }
+    });
+    return c.json({ data: { attachments: result.attachments } }, 200);
+  });
+
+  const postLessonFileUploadInitRoute = createRoute({
+    method: "post",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/files/upload-init`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonFileUploadInitBodySchema } } }
+    },
+    responses: {
+      201: {
+        description:
+          "Created attachment and presigned PUT URL. Upload bytes to `upload.url` with required headers.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(
+              z.object({
+                attachment: lessonFileAttachmentDtoSchema,
+                upload: lessonFileUploadInstructionSchema,
+                limits: z.object({ maxBytes: z.number().int() })
+              })
+            )
+          }
+        }
+      },
+      503: {
+        description: "Object storage signing unavailable",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(postLessonFileUploadInitRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.initLessonFileUploadForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles,
+      body
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    let upload;
+    try {
+      upload = await resolvedDependencies.adapters.storage.createPresignedPutObjectUrl({
+        key: result.storageKey,
+        contentType: result.attachment.mimeType,
+        contentLength: result.attachment.sizeBytes
+      });
+    } catch {
+      return c.json({ error: "Object storage signing failed" }, 503) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_FILE_UPLOAD_INIT,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, fileId: result.attachment.id }
+    });
+    return c.json(
+      {
+        data: {
+          attachment: result.attachment,
+          upload: { method: "PUT" as const, url: upload.url, headers: upload.headers },
+          limits: { maxBytes: MAX_LESSON_FILE_BYTES }
+        }
+      },
+      201
+    );
+  });
+
+  const getLessonFileDownloadRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/files/{fileId}/download`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonFileParams },
+    responses: {
+      200: {
+        description: "Short-lived signed download URL (enrollment required for learners).",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ download: lessonFileDownloadDtoSchema }))
+          }
+        }
+      },
+      503: {
+        description: "Object storage signing unavailable",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(getLessonFileDownloadRoute, async (c) => {
+    const { tenantId, courseId, lessonId, fileId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.getLessonFileDownloadForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      fileId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    let signed;
+    try {
+      signed = await resolvedDependencies.adapters.storage.createPresignedGetObjectUrl({
+        key: result.storageKey,
+        fileName: result.attachment.fileName,
+        contentType: result.attachment.mimeType
+      });
+    } catch {
+      return c.json({ error: "Object storage signing failed" }, 503) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_FILE_DOWNLOAD,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, fileId }
+    });
+    return c.json(
+      {
+        data: {
+          download: {
+            url: signed.url,
+            expiresInSeconds: signed.expiresInSeconds,
+            fileName: result.attachment.fileName,
+            mimeType: result.attachment.mimeType
+          }
+        }
+      },
+      200
+    );
   });
 
   const patchCourseRoute = createRoute({

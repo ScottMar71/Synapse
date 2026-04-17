@@ -180,9 +180,10 @@ model Lesson {
   archivedAt  DateTime?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
-  module            Module                @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  module            Module                 @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   progress          Progress[]
   glossaryEntries   LessonGlossaryEntry[]
+  fileAttachments   LessonFileAttachment[]
 
   @@index([tenantId])
   @@index([moduleId])
@@ -207,6 +208,29 @@ model LessonGlossaryEntry {
   @@index([lessonId])
   @@index([tenantId, lessonId])
   @@map("lesson_glossary_entries")
+}
+
+/// Downloadable lesson resource (object storage key + display metadata). Tenant- and lesson-scoped.
+model LessonFileAttachment {
+  id          String    @id @default(cuid())
+  tenantId    String
+  lessonId    String
+  /// Object key within the configured bucket (prefix includes tenant id; omit from learner DTOs).
+  storageKey  String    @unique
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  sortOrder   Int       @default(0)
+  description String?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([lessonId])
+  @@index([tenantId, lessonId])
+  @@map("lesson_file_attachments")
 }
 
 model Enrollment {

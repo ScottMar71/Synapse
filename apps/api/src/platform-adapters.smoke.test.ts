@@ -35,6 +35,12 @@ function adaptersViaExplicit(): PlatformAdapters {
     storage: {
       async putObject() {
         return;
+      },
+      async createPresignedPutObjectUrl() {
+        return { url: "https://example.invalid/put", headers: {} };
+      },
+      async createPresignedGetObjectUrl() {
+        return { url: "https://example.invalid/get", expiresInSeconds: 60 };
       }
     },
     email: {

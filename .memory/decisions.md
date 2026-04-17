@@ -97,3 +97,10 @@
 - Context: Staff need a lesson picker in the course editor; reading body and `updatedAt` belong on the reading DTO for optimistic concurrency (decision 011).
 - Decision: `GET .../lesson-outline` returns modules and lessons with **`id`, `moduleId`, `title`, `sortOrder`, `contentKind`** only. The admin reading editor loads HTML and version baseline via **`GET .../lessons/{lessonId}/reading`** when a READING lesson is selected.
 - Status: Active
+
+### 014 - Lesson files: S3-compatible storage + presigned URLs
+
+- Date: 2026-04-17
+- Context: Downloadable lesson resources need tenant-safe storage aligned with **Supabase EU** (decision 006) without vendor SDKs in `packages/database`.
+- Decision: Persist metadata in Prisma (`lesson_file_attachments`). Extend **`StorageAdapter`** in `packages/platform` with presigned PUT/GET. Implement signing with **AWS SDK v3** only in **`apps/api`** (`object-storage.ts`), wired from `LMS_OBJECT_STORAGE_*` in `serve.ts`. Target **Supabase Storage** via its S3-compatible endpoint (`forcePathStyle: true`). **Noop** URLs when env is absent. Routes mirror glossary access: staff **upload-init**; list + **download** for enrolled learners or staff.
+- Status: Active

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import {
   Prisma,
   type EnrollmentStatus,
@@ -2193,4 +2195,303 @@ export async function archiveLessonGlossaryEntryForStaff(input: {
   });
 
   return { ok: true, archived: true };
+}
+
+/** Upper bound for a single lesson attachment (staff upload init). */
+export const MAX_LESSON_FILE_BYTES = 100 * 1024 * 1024;
+
+export type LessonFileAttachmentDto = {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sortOrder: number;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function lessonFileStorageKeyPrefix(tenantId: string): string {
+  return `tenants/${tenantId}/lesson-files/`;
+}
+
+function buildLessonFileStorageKey(tenantId: string, attachmentId: string): string {
+  return `${lessonFileStorageKeyPrefix(tenantId)}${attachmentId}`;
+}
+
+function normalizeLessonAttachmentFileName(raw: string): string {
+  const base = raw.trim().replace(/^.*[/\\]/, "");
+  if (!base) {
+    return "file";
+  }
+  return base.length > 255 ? base.slice(0, 255) : base;
+}
+
+function mapLessonFileAttachment(row: {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sortOrder: number;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): LessonFileAttachmentDto {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    lessonId: row.lessonId,
+    fileName: row.fileName,
+    mimeType: row.mimeType,
+    sizeBytes: row.sizeBytes,
+    sortOrder: row.sortOrder,
+    description: row.description,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+async function assertLessonFileViewerAccess(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true } | { ok: false; error: ServiceError }> {
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true }
+  });
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  return { ok: true };
+}
+
+export async function initLessonFileUploadForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+  body: {
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    sortOrder?: number;
+    description?: string | null;
+  };
+}): Promise<
+  { ok: true; attachment: LessonFileAttachmentDto; storageKey: string } | { ok: false; error: ServiceError }
+> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const fileName = normalizeLessonAttachmentFileName(input.body.fileName);
+  const mimeType = input.body.mimeType.trim();
+  if (!mimeType || mimeType.length > 200) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "mimeType is required" } };
+  }
+
+  const sizeBytes = input.body.sizeBytes;
+  if (!Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_LESSON_FILE_BYTES) {
+    return {
+      ok: false,
+      error: {
+        code: "INVALID_INPUT",
+        message: `sizeBytes must be between 1 and ${MAX_LESSON_FILE_BYTES}`
+      }
+    };
+  }
+
+  let description: string | null = null;
+  if (input.body.description !== undefined && input.body.description !== null) {
+    const d = input.body.description.trim();
+    description = d.length > 2000 ? d.slice(0, 2000) : d.length > 0 ? d : null;
+  }
+
+  let sortOrder = input.body.sortOrder;
+  if (sortOrder === undefined) {
+    const agg = await prisma.lessonFileAttachment.aggregate({
+      where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+      _max: { sortOrder: true }
+    });
+    sortOrder = (agg._max.sortOrder ?? -1) + 1;
+  }
+
+  const id = randomUUID();
+  const storageKey = buildLessonFileStorageKey(input.tenantId, id);
+
+  const created = await prisma.lessonFileAttachment.create({
+    data: {
+      id,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      storageKey,
+      fileName,
+      mimeType,
+      sizeBytes,
+      sortOrder,
+      description
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      storageKey: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      sortOrder: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return {
+    ok: true,
+    attachment: mapLessonFileAttachment(created),
+    storageKey: created.storageKey
+  };
+}
+
+export async function listLessonFileAttachmentsForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; attachments: LessonFileAttachmentDto[] } | { ok: false; error: ServiceError }> {
+  const access = await assertLessonFileViewerAccess({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!access.ok) {
+    return access;
+  }
+
+  const rows = await prisma.lessonFileAttachment.findMany({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      sortOrder: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, attachments: rows.map(mapLessonFileAttachment) };
+}
+
+export async function getLessonFileDownloadForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  fileId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<
+  { ok: true; attachment: LessonFileAttachmentDto; storageKey: string } | { ok: false; error: ServiceError }
+> {
+  const access = await assertLessonFileViewerAccess({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!access.ok) {
+    return access;
+  }
+
+  const row = await prisma.lessonFileAttachment.findFirst({
+    where: {
+      id: input.fileId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      archivedAt: null
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      storageKey: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      sortOrder: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  if (!row) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "File not found" } };
+  }
+
+  const expectedPrefix = lessonFileStorageKeyPrefix(input.tenantId);
+  if (!row.storageKey.startsWith(expectedPrefix)) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "File not found" } };
+  }
+
+  return {
+    ok: true,
+    attachment: mapLessonFileAttachment(row),
+    storageKey: row.storageKey
+  };
 }
