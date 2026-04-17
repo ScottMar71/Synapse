@@ -605,6 +605,26 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     }
   } as const;
 
+  const scormLessonErrorResponses = {
+    ...lessonReadingErrorResponses,
+    409: {
+      description: "Conflict",
+      content: { "application/json": { schema: apiErrorBodySchema } }
+    }
+  } as const;
+
+  const scormProcessErrorResponses = {
+    ...scormLessonErrorResponses,
+    500: {
+      description: "Server error",
+      content: { "application/json": { schema: apiErrorBodySchema } }
+    },
+    503: {
+      description: "Object storage unavailable",
+      content: { "application/json": { schema: apiErrorBodySchema } }
+    }
+  } as const;
+
   const getLessonReadingRoute = createRoute({
     method: "get",
     path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/reading`,
@@ -1107,7 +1127,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       lessonId,
       fileId,
       roles: auth.roles,
-      patch: { fileName: body.fileName, description: body.description }
+      patch: { fileName: body.fileName, description: body.description, sortOrder: body.sortOrder }
     });
     if (!result.ok) {
       const mapped = mapServiceError(result.error);

@@ -377,10 +377,12 @@ export const lessonFileReorderBodySchema = z
 export const lessonFilePatchBodySchema = z
   .object({
     fileName: z.string().min(1).max(255).optional(),
-    description: z.string().max(2000).nullable().optional()
+    description: z.string().max(2000).nullable().optional(),
+    sortOrder: z.number().int().optional()
   })
   .refine(
-    (body) => body.fileName !== undefined || body.description !== undefined,
+    (body) =>
+      body.fileName !== undefined || body.description !== undefined || body.sortOrder !== undefined,
     { message: "At least one field is required" }
   )
   .openapi("LessonFilePatchBody");
