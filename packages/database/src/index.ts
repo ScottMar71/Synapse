@@ -216,4 +216,5 @@ export async function provisionLearnerForTenant(input: {
   }
 }
 
+export { READING_HTML_MAX_LENGTH, sanitizeReadingHtml } from "./reading-html";
 export * from "./lms-domain";

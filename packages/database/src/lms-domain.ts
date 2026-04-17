@@ -1,6 +1,13 @@
-import type { EnrollmentStatus, Prisma, ProgressScope, SubmissionStatus } from "@prisma/client";
+import {
+  Prisma,
+  type EnrollmentStatus,
+  type LessonContentKind,
+  type ProgressScope,
+  type SubmissionStatus
+} from "@prisma/client";
 
 import { prisma } from "./prisma";
+import { READING_HTML_MAX_LENGTH, sanitizeReadingHtml } from "./reading-html";
 
 export type MembershipRoleName = "LEARNER" | "INSTRUCTOR" | "ADMIN";
 
@@ -1280,4 +1287,595 @@ export async function listProgressReportRows(
       : null;
 
   return { rows, nextCursor };
+}
+
+const LESSON_BODY_MAX_LENGTH = 500_000;
+
+export type LessonVideoCaptionTrackDto = {
+  src: string;
+  label: string;
+  srclang: string;
+  isDefault?: boolean;
+};
+
+export type LessonVideoAssetDto = {
+  sourceUrl: string;
+  posterUrl?: string | null;
+  captions?: LessonVideoCaptionTrackDto[];
+};
+
+export type LessonPlaybackDto = {
+  lesson: {
+    id: string;
+    title: string;
+    contentKind: "READING" | "VIDEO";
+    readingContent: string | null;
+  };
+  video: {
+    src: string;
+    poster: string | null;
+    captions: LessonVideoCaptionTrackDto[];
+  } | null;
+};
+
+export type LessonStaffDto = {
+  id: string;
+  title: string;
+  contentKind: "READING" | "VIDEO";
+  content: string | null;
+  videoAsset: LessonVideoAssetDto | null;
+};
+
+function isHttpUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function parseVideoCaptionsFromJson(raw: unknown): LessonVideoCaptionTrackDto[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: LessonVideoCaptionTrackDto[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      continue;
+    }
+    const r = item as Record<string, unknown>;
+    if (typeof r.src !== "string" || !isHttpUrl(r.src)) {
+      continue;
+    }
+    if (typeof r.label !== "string" || r.label.length === 0 || r.label.length > 200) {
+      continue;
+    }
+    if (typeof r.srclang !== "string" || r.srclang.length === 0 || r.srclang.length > 35) {
+      continue;
+    }
+    const cap: LessonVideoCaptionTrackDto = { src: r.src, label: r.label, srclang: r.srclang };
+    if (r.isDefault === true) {
+      cap.isDefault = true;
+    }
+    out.push(cap);
+    if (out.length >= 32) {
+      break;
+    }
+  }
+  return out;
+}
+
+function parseVideoAssetFromDb(value: Prisma.JsonValue | null): LessonVideoAssetDto | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const o = value as Record<string, unknown>;
+  if (typeof o.sourceUrl !== "string" || !isHttpUrl(o.sourceUrl)) {
+    return null;
+  }
+  const asset: LessonVideoAssetDto = { sourceUrl: o.sourceUrl };
+  if (o.posterUrl === null) {
+    asset.posterUrl = null;
+  } else if (typeof o.posterUrl === "string") {
+    if (!isHttpUrl(o.posterUrl)) {
+      return null;
+    }
+    asset.posterUrl = o.posterUrl;
+  } else if (o.posterUrl !== undefined) {
+    return null;
+  }
+  if ("captions" in o) {
+    const caps = parseVideoCaptionsFromJson(o.captions);
+    if (caps.length > 0) {
+      asset.captions = caps;
+    }
+  }
+  return asset;
+}
+
+function videoAssetToJson(asset: LessonVideoAssetDto): Prisma.InputJsonValue {
+  const payload: Record<string, Prisma.InputJsonValue> = { sourceUrl: asset.sourceUrl };
+  if (asset.posterUrl !== undefined) {
+    payload.posterUrl = (asset.posterUrl ?? null) as unknown as Prisma.InputJsonValue;
+  }
+  if (asset.captions !== undefined && asset.captions.length > 0) {
+    payload.captions = asset.captions as unknown as Prisma.InputJsonValue;
+  }
+  return payload;
+}
+
+function toLessonStaffDto(row: {
+  id: string;
+  title: string;
+  content: string | null;
+  contentKind: LessonContentKind;
+  videoAsset: Prisma.JsonValue | null;
+}): LessonStaffDto {
+  return {
+    id: row.id,
+    title: row.title,
+    contentKind: row.contentKind === "VIDEO" ? "VIDEO" : "READING",
+    content: row.content,
+    videoAsset: parseVideoAssetFromDb(row.videoAsset)
+  };
+}
+
+async function assertStaffLessonInCourse(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true } | { ok: false; error: ServiceError }> {
+  const staff = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!staff) {
+    return { ok: false, error: { code: "FORBIDDEN", message: "Lesson updates require staff access" } };
+  }
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true }
+  });
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+  return { ok: true };
+}
+
+export async function getLessonPlaybackForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; playback: LessonPlaybackDto } | { ok: false; error: ServiceError }> {
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      contentKind: true,
+      videoAsset: true
+    }
+  });
+
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const contentKind: "READING" | "VIDEO" = lesson.contentKind === "VIDEO" ? "VIDEO" : "READING";
+  let video: LessonPlaybackDto["video"] = null;
+  if (contentKind === "VIDEO") {
+    const asset = parseVideoAssetFromDb(lesson.videoAsset);
+    if (!asset) {
+      return { ok: false, error: { code: "NOT_FOUND", message: "Video lesson is not configured" } };
+    }
+    video = {
+      src: asset.sourceUrl,
+      poster: asset.posterUrl ?? null,
+      captions: asset.captions ?? []
+    };
+  }
+
+  const raw = lesson.content;
+  const readingContent = raw === null || raw.trim() === "" ? null : raw;
+
+  return {
+    ok: true,
+    playback: {
+      lesson: {
+        id: lesson.id,
+        title: lesson.title,
+        contentKind,
+        readingContent
+      },
+      video
+    }
+  };
+}
+
+export async function patchLessonForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+  patch: {
+    title?: string;
+    content?: string | null;
+    contentKind?: "READING" | "VIDEO";
+    videoAsset?: LessonVideoAssetDto | null;
+  };
+}): Promise<{ ok: true; lesson: LessonStaffDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse(input);
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const existing = await prisma.lesson.findFirst({
+    where: { id: input.lessonId, tenantId: input.tenantId, archivedAt: null },
+    select: {
+      title: true,
+      content: true,
+      contentKind: true,
+      videoAsset: true
+    }
+  });
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  if (
+    input.patch.title === undefined &&
+    input.patch.content === undefined &&
+    input.patch.contentKind === undefined &&
+    input.patch.videoAsset === undefined
+  ) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "No fields to update" } };
+  }
+
+  let nextTitle = existing.title;
+  if (input.patch.title !== undefined) {
+    const t = input.patch.title.trim();
+    if (!t) {
+      return { ok: false, error: { code: "INVALID_INPUT", message: "Title cannot be empty" } };
+    }
+    nextTitle = t;
+  }
+
+  let nextContent: string | null = existing.content;
+  if (input.patch.content !== undefined) {
+    if (input.patch.content === null) {
+      nextContent = null;
+    } else {
+      if (input.patch.content.length > LESSON_BODY_MAX_LENGTH) {
+        return { ok: false, error: { code: "INVALID_INPUT", message: "Lesson content is too large" } };
+      }
+      nextContent = input.patch.content;
+    }
+  }
+
+  const nextKind: "READING" | "VIDEO" =
+    input.patch.contentKind !== undefined
+      ? input.patch.contentKind
+      : existing.contentKind === "VIDEO"
+        ? "VIDEO"
+        : "READING";
+
+  let nextVideoValue: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+
+  if (nextKind === "READING") {
+    nextVideoValue = Prisma.JsonNull;
+  } else if (input.patch.videoAsset !== undefined) {
+    if (input.patch.videoAsset === null) {
+      return {
+        ok: false,
+        error: { code: "BAD_REQUEST", message: "Video lesson requires videoAsset" }
+      };
+    }
+    nextVideoValue = videoAssetToJson(input.patch.videoAsset);
+  } else {
+    const parsed = parseVideoAssetFromDb(existing.videoAsset);
+    if (!parsed) {
+      return {
+        ok: false,
+        error: { code: "BAD_REQUEST", message: "Video lesson requires videoAsset" }
+      };
+    }
+    nextVideoValue = videoAssetToJson(parsed);
+  }
+
+  const updated = await prisma.lesson.update({
+    where: { id: input.lessonId },
+    data: {
+      title: nextTitle,
+      content: nextContent,
+      contentKind: nextKind,
+      videoAsset: nextVideoValue
+    },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      contentKind: true,
+      videoAsset: true
+    }
+  });
+
+  return { ok: true, lesson: toLessonStaffDto(updated) };
+}
+
+
+export type LessonReadingDto = {
+  lessonId: string;
+  courseId: string;
+  title: string;
+  html: string | null;
+};
+
+export async function getLessonReadingForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; reading: LessonReadingDto } | { ok: false; error: ServiceError }> {
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true, title: true, content: true }
+  });
+
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const raw = lesson.content;
+  let html: string | null = null;
+  if (raw !== null && raw.trim() !== "") {
+    if (raw.length > READING_HTML_MAX_LENGTH) {
+      return {
+        ok: false,
+        error: { code: "INVALID_INPUT", message: "Lesson reading content is too large" }
+      };
+    }
+    const sanitized = sanitizeReadingHtml(raw);
+    html = sanitized.trim() === "" ? null : sanitized;
+  }
+
+  return {
+    ok: true,
+    reading: {
+      lessonId: lesson.id,
+      courseId: input.courseId,
+      title: lesson.title,
+      html
+    }
+  };
+}
+
+export async function patchLessonReadingForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+  patch: { title?: string; content?: string | null };
+}): Promise<{ ok: true; reading: LessonReadingDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse(input);
+  if (!gate.ok) {
+    return gate;
+  }
+
+  if (input.patch.title === undefined && input.patch.content === undefined) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "No fields to update" } };
+  }
+
+  const existing = await prisma.lesson.findFirst({
+    where: { id: input.lessonId, tenantId: input.tenantId, archivedAt: null },
+    select: { title: true, content: true }
+  });
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  let nextTitle = existing.title;
+  if (input.patch.title !== undefined) {
+    const t = input.patch.title.trim();
+    if (!t) {
+      return { ok: false, error: { code: "INVALID_INPUT", message: "Title cannot be empty" } };
+    }
+    nextTitle = t;
+  }
+
+  let nextContent: string | null = existing.content;
+  if (input.patch.content !== undefined) {
+    if (input.patch.content === null) {
+      nextContent = null;
+    } else {
+      if (input.patch.content.length > READING_HTML_MAX_LENGTH) {
+        return {
+          ok: false,
+          error: { code: "INVALID_INPUT", message: "Lesson reading content is too large" }
+        };
+      }
+      const sanitized = sanitizeReadingHtml(input.patch.content);
+      nextContent = sanitized.trim() === "" ? null : sanitized;
+    }
+  }
+
+  const updated = await prisma.lesson.update({
+    where: { id: input.lessonId },
+    data: { title: nextTitle, content: nextContent },
+    select: { id: true, title: true, content: true }
+  });
+
+  let html: string | null = null;
+  if (updated.content !== null && updated.content.trim() !== "") {
+    const sanitized = sanitizeReadingHtml(updated.content);
+    html = sanitized.trim() === "" ? null : sanitized;
+  }
+
+  return {
+    ok: true,
+    reading: {
+      lessonId: updated.id,
+      courseId: input.courseId,
+      title: updated.title,
+      html
+    }
+  };
+}
+
+export type LessonGlossaryEntryDto = {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  term: string;
+  definition: string;
+  sortOrder: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function listLessonGlossaryEntriesForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; entries: LessonGlossaryEntryDto[] } | { ok: false; error: ServiceError }> {
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true }
+  });
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  return { ok: true, entries: [] };
+}
+
+export async function createLessonGlossaryEntry(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+  body: { term: string; definition: string; sortOrder?: number };
+}): Promise<{ ok: true; entry: LessonGlossaryEntryDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+  return {
+    ok: false,
+    error: {
+      code: "BAD_REQUEST",
+      message: "Glossary authoring is not available yet"
+    }
+  };
 }

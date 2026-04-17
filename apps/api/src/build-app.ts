@@ -12,6 +12,10 @@ import {
   enrollmentDtoSchema,
   learnerProvisionBodySchema,
   learnerSummarySchema,
+  lessonGlossaryCreateBodySchema,
+  lessonGlossaryEntryDtoSchema,
+  lessonReadingDtoSchema,
+  lessonReadingPatchBodySchema,
   lmsApiTags,
   progressDtoSchema,
   progressPutBodySchema,
@@ -27,14 +31,18 @@ import {
   createCourseCategory,
   createEnrollment,
   getCourseForViewer,
+  createLessonGlossaryEntry,
   getActiveMembershipRoles,
+  getLessonReadingForViewer,
   listCourseCategoriesForTenant,
   listCoursesForTenant,
   listCoursesInCategory,
   listEnrollmentsForUser,
   listLearnersForTenant,
+  listLessonGlossaryEntriesForViewer,
   listProgressForUser,
   listPublishedCoursesForTenant,
+  patchLessonReadingForStaff,
   provisionLearnerForTenant,
   removeCourseFromCategory,
   setCourseCategoryLinks,
@@ -134,6 +142,10 @@ type DataAccess = {
   setCourseCategoryLinks: typeof setCourseCategoryLinks;
   removeCourseFromCategory: typeof removeCourseFromCategory;
   updateCourse: typeof updateCourse;
+  getLessonReadingForViewer: typeof getLessonReadingForViewer;
+  patchLessonReadingForStaff: typeof patchLessonReadingForStaff;
+  listLessonGlossaryEntriesForViewer: typeof listLessonGlossaryEntriesForViewer;
+  createLessonGlossaryEntry: typeof createLessonGlossaryEntry;
   getProgressReportSummary: typeof getProgressReportSummary;
   listProgressReportRows: typeof listProgressReportRows;
 };
@@ -195,6 +207,10 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     setCourseCategoryLinks,
     removeCourseFromCategory,
     updateCourse,
+    getLessonReadingForViewer,
+    patchLessonReadingForStaff,
+    listLessonGlossaryEntriesForViewer,
+    createLessonGlossaryEntry,
     getProgressReportSummary,
     listProgressReportRows,
     ...dependencies.dataAccess
@@ -280,6 +296,10 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
 
   const tenantCourseCategoryParams = tenantCourseParams.extend({
     categoryId: z.string().min(1).openapi({ param: { name: "categoryId", in: "path" } })
+  });
+
+  const tenantCourseLessonParams = tenantCourseParams.extend({
+    lessonId: z.string().min(1).openapi({ param: { name: "lessonId", in: "path" } })
   });
 
   const dataEnvelope = <T extends z.ZodType>(schema: T) =>
@@ -415,6 +435,216 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       return c.json({ error: mapped.message }, mapped.status) as never;
     }
     return c.json({ data: { course: result.course } }, 200);
+  });
+
+  const lessonReadingErrorResponses = {
+    400: {
+      description: "Bad request",
+      content: { "application/json": { schema: apiErrorBodySchema } }
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: apiErrorBodySchema } }
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: apiErrorBodySchema } }
+    },
+    404: {
+      description: "Not found",
+      content: { "application/json": { schema: apiErrorBodySchema } }
+    }
+  } as const;
+
+  const getLessonReadingRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/reading`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description:
+          "Reading lesson body as sanitized HTML (allowlist). Staff may preview; learners need enrollment.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ reading: lessonReadingDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(getLessonReadingRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.getLessonReadingForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_READING_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+    return c.json({ data: { reading: result.reading } }, 200);
+  });
+
+  const patchLessonReadingRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/reading`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonReadingPatchBodySchema } } }
+    },
+    responses: {
+      200: {
+        description: "Updated reading lesson (body stored sanitized).",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ reading: lessonReadingDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(patchLessonReadingRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.patchLessonReadingForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles,
+      patch: { title: body.title, content: body.content }
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_READING_PATCH,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+    return c.json({ data: { reading: result.reading } }, 200);
+  });
+
+  const listLessonGlossaryRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/glossary`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description: "Lesson glossary entries (empty until glossary storage ships).",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ entries: z.array(lessonGlossaryEntryDtoSchema) }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(listLessonGlossaryRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.listLessonGlossaryEntriesForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_GLOSSARY_LIST_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, resultCount: result.entries.length }
+    });
+    return c.json({ data: { entries: result.entries } }, 200);
+  });
+
+  const createLessonGlossaryRoute = createRoute({
+    method: "post",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/glossary`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonGlossaryCreateBodySchema } } }
+    },
+    responses: {
+      201: {
+        description: "Created glossary entry",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ entry: lessonGlossaryEntryDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(createLessonGlossaryRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.createLessonGlossaryEntry({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles,
+      body: {
+        term: body.term,
+        definition: body.definition,
+        sortOrder: body.sortOrder
+      }
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_GLOSSARY_CREATE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, entryId: result.entry.id }
+    });
+    return c.json({ data: { entry: result.entry } }, 201);
   });
 
   const patchCourseRoute = createRoute({
