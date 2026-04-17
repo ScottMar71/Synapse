@@ -1970,6 +1970,315 @@ export async function patchLessonReadingForStaff(input: {
   };
 }
 
+/** Matches PRD / design default for video lesson completion (80% watched). */
+export const DEFAULT_VIDEO_WATCH_COMPLETION_THRESHOLD = 0.8;
+
+export function computeEffectiveWatchedRatio(input: {
+  positionSec: number;
+  durationSec: number | null | undefined;
+  playedRatio?: number | null;
+}): number {
+  const dur = input.durationSec;
+  const fromTimeline =
+    dur != null && dur > 0 ? Math.min(1, input.positionSec / dur) : 0;
+  return Math.min(1, Math.max(fromTimeline, input.playedRatio ?? 0));
+}
+
+export type LessonWatchStateDto = {
+  id: string;
+  tenantId: string;
+  userId: string;
+  lessonId: string;
+  positionSec: number;
+  durationSec: number | null;
+  updatedAt: string;
+};
+
+export type LessonWatchCompletionResultDto = {
+  threshold: number;
+  effectiveWatchedRatio: number;
+  lessonCompleted: boolean;
+  completionAppliedThisRequest: boolean;
+  lessonProgress: ProgressDto | null;
+};
+
+function mapLessonWatchStateRow(row: {
+  id: string;
+  tenantId: string;
+  userId: string;
+  lessonId: string;
+  positionSec: number;
+  durationSec: number | null;
+  updatedAt: Date;
+}): LessonWatchStateDto {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    userId: row.userId,
+    lessonId: row.lessonId,
+    positionSec: row.positionSec,
+    durationSec: row.durationSec,
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+async function findLessonScopeProgress(
+  tenantId: string,
+  userId: string,
+  courseId: string,
+  lessonId: string
+) {
+  return prisma.progress.findFirst({
+    where: {
+      tenantId,
+      userId,
+      courseId,
+      lessonId,
+      scope: "LESSON",
+      archivedAt: null
+    }
+  });
+}
+
+function isLessonProgressComplete(row: {
+  percent: number;
+  completedAt: Date | null;
+}): boolean {
+  return row.completedAt != null || row.percent >= 100;
+}
+
+export async function getLessonWatchStateForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<
+  { ok: true; watchState: LessonWatchStateDto | null } | { ok: false; error: ServiceError }
+> {
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true, contentKind: true }
+  });
+
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  if (lesson.contentKind !== "VIDEO") {
+    return { ok: false, error: { code: "BAD_REQUEST", message: "Lesson is not a video lesson" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const row = await prisma.lessonWatchState.findUnique({
+    where: {
+      tenantId_userId_lessonId: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        lessonId: input.lessonId
+      }
+    }
+  });
+
+  return { ok: true, watchState: row ? mapLessonWatchStateRow(row) : null };
+}
+
+/**
+ * Persists watch position with **last-write-wins** semantics (no version field).
+ * When the effective watched ratio is at or above `completionThreshold` (default {@link DEFAULT_VIDEO_WATCH_COMPLETION_THRESHOLD}),
+ * attempts an idempotent lesson `Progress` upsert at 100% for enrolled learners.
+ */
+export async function patchLessonWatchStateForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+  patch: { positionSec: number; durationSec?: number; playedRatio?: number };
+  completionThreshold?: number;
+}): Promise<
+  | { ok: true; watchState: LessonWatchStateDto; completion: LessonWatchCompletionResultDto }
+  | { ok: false; error: ServiceError }
+> {
+  const threshold = input.completionThreshold ?? DEFAULT_VIDEO_WATCH_COMPLETION_THRESHOLD;
+  if (!(threshold > 0 && threshold <= 1)) {
+    return {
+      ok: false,
+      error: { code: "INVALID_INPUT", message: "completionThreshold must be between 0 and 1" }
+    };
+  }
+
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true, contentKind: true, moduleId: true }
+  });
+
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  if (lesson.contentKind !== "VIDEO") {
+    return { ok: false, error: { code: "BAD_REQUEST", message: "Lesson is not a video lesson" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const existingState = await prisma.lessonWatchState.findUnique({
+    where: {
+      tenantId_userId_lessonId: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        lessonId: input.lessonId
+      }
+    },
+    select: { durationSec: true }
+  });
+
+  const nextDuration =
+    input.patch.durationSec !== undefined
+      ? input.patch.durationSec
+      : (existingState?.durationSec ?? null);
+
+  let positionNext = input.patch.positionSec;
+  if (nextDuration !== null && nextDuration > 0 && positionNext > nextDuration) {
+    positionNext = nextDuration;
+  }
+
+  const row = await prisma.lessonWatchState.upsert({
+    where: {
+      tenantId_userId_lessonId: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        lessonId: input.lessonId
+      }
+    },
+    create: {
+      tenantId: input.tenantId,
+      userId: input.viewerUserId,
+      lessonId: input.lessonId,
+      positionSec: positionNext,
+      durationSec: nextDuration
+    },
+    update: {
+      positionSec: positionNext,
+      durationSec: nextDuration
+    }
+  });
+
+  const effectiveWatchedRatio = computeEffectiveWatchedRatio({
+    positionSec: positionNext,
+    durationSec: nextDuration,
+    playedRatio: input.patch.playedRatio
+  });
+
+  const progressBefore = await findLessonScopeProgress(
+    input.tenantId,
+    input.viewerUserId,
+    input.courseId,
+    input.lessonId
+  );
+  const wasComplete = progressBefore != null && isLessonProgressComplete(progressBefore);
+
+  let completionAppliedThisRequest = false;
+  if (effectiveWatchedRatio >= threshold && !wasComplete) {
+    const progressResult = await upsertProgressForUser({
+      tenantId: input.tenantId,
+      userId: input.viewerUserId,
+      body: {
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        scope: "LESSON",
+        moduleId: lesson.moduleId,
+        lessonId: input.lessonId,
+        percent: 100
+      }
+    });
+    completionAppliedThisRequest = progressResult.ok;
+  }
+
+  const progressAfterRow = await findLessonScopeProgress(
+    input.tenantId,
+    input.viewerUserId,
+    input.courseId,
+    input.lessonId
+  );
+  const lessonCompleted =
+    progressAfterRow != null && isLessonProgressComplete(progressAfterRow);
+
+  return {
+    ok: true,
+    watchState: mapLessonWatchStateRow(row),
+    completion: {
+      threshold,
+      effectiveWatchedRatio,
+      lessonCompleted,
+      completionAppliedThisRequest,
+      lessonProgress: progressAfterRow ? mapProgress(progressAfterRow) : null
+    }
+  };
+}
+
 export type LessonGlossaryEntryDto = {
   id: string;
   tenantId: string;

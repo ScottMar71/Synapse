@@ -31,8 +31,9 @@
   - `GET /api/v1/tenants/:tenantId/courses` — non-archived courses
   - `GET /api/v1/tenants/:tenantId/learners` — users with an active `LEARNER` membership
   - `packages/database` exposes `listCoursesForTenant` and `listLearnersForTenant`; `buildApp` accepts injectable `dataAccess` for tests
-- **Lesson video (spike)**: Conductor deliverable `67e25387-a839-4c36-a680-d407779cc585` — recommendation **decision 012**; watch-state Zod sketches in `packages/contracts/src/lms-api.ts`. `lesson_watch_state` migration + learner watch API + player wiring are follow-on work.
+- **Lesson video (spike)**: Conductor deliverable `67e25387-a839-4c36-a680-d407779cc585` — recommendation **decision 012**. **Watch state API** (deliverable `472764d9-c85c-4ef2-8d35-cc1f3e24390d`): `lesson_watch_states` table; `GET|PATCH .../courses/:courseId/lessons/:lessonId/watch-state` in `apps/api` (OpenAPI + audit); domain helpers in `packages/database/src/lms-domain.ts`. Learner `VideoPlayer` wiring remains follow-on.
 - **Lesson file attachments (API)**: `lesson_file_attachments` model; `GET|POST .../lessons/{lessonId}/files`, `GET .../files/{fileId}/download`; S3-compatible presigning when `LMS_OBJECT_STORAGE_*` set (**decision 014**, `infra/deployment/lesson-object-storage.md`).
+- **Lesson external links (API)**: `lesson_external_links` model; `GET|POST .../lessons/{lessonId}/links`, `PATCH|DELETE .../links/{linkId}`; URL normalization in `packages/database/src/lesson-link-url.ts` (**decision 016**).
 
 ## In Progress
 

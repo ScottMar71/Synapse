@@ -19,6 +19,8 @@ export const AUDIT_ACTIONS = {
   LESSON_PATCH: "lesson.patch",
   LESSON_READING_READ: "lesson.reading_read",
   LESSON_READING_PATCH: "lesson.reading_patch",
+  LESSON_WATCH_READ: "lesson.watch_read",
+  LESSON_WATCH_PATCH: "lesson.watch_patch",
   LESSON_GLOSSARY_LIST_READ: "lesson.glossary_list_read",
   LESSON_GLOSSARY_CREATE: "lesson.glossary_create",
   LESSON_GLOSSARY_PATCH: "lesson.glossary_patch",

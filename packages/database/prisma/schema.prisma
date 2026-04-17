@@ -64,6 +64,7 @@ model Tenant {
   auditEvents      AuditEvent[]
   lessonGlossaryEntries LessonGlossaryEntry[]
   lessonExternalLinks   LessonExternalLink[]
+  lessonWatchStates     LessonWatchState[]
 
   @@map("tenants")
 }
@@ -85,6 +86,7 @@ model User {
   submissions  Submission[]
   progress     Progress[]
   auditEvents  AuditEvent[]
+  lessonWatchStates LessonWatchState[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -186,11 +188,31 @@ model Lesson {
   glossaryEntries   LessonGlossaryEntry[]
   externalLinks     LessonExternalLink[]
   fileAttachments   LessonFileAttachment[]
+  watchStates       LessonWatchState[]
 
   @@index([tenantId])
   @@index([moduleId])
   @@unique([moduleId, sortOrder])
   @@map("lessons")
+}
+
+/// Per-learner resume cursor for video lessons (decision 012). Last-write-wins on PATCH (no version column).
+model LessonWatchState {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String
+  lessonId    String
+  positionSec Float
+  durationSec Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, lessonId])
+  @@index([tenantId, lessonId])
+  @@map("lesson_watch_states")
 }
 
 /// Curated external URL attached to a lesson (Resources panel). Tenant- and lesson-scoped; soft-delete via archivedAt.

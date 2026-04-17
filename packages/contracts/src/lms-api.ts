@@ -225,7 +225,7 @@ export const lessonPlaybackDtoSchema = z
   })
   .openapi("LessonPlayback");
 
-/** Resume cursor for video lessons — future `lesson_watch_state` table (`.memory/decisions.md` 012). */
+/** Resume cursor for video lessons (`lesson_watch_states`, `.memory/decisions.md` 012). */
 export const lessonWatchStateDtoSchema = z
   .object({
     id: z.string(),
@@ -245,6 +245,21 @@ export const lessonWatchStatePatchBodySchema = z
     playedRatio: z.number().min(0).max(1).optional()
   })
   .openapi("LessonWatchStatePatchBody");
+
+/** Server-evaluated completion vs configurable threshold (default 0.8 on the API). */
+export const lessonWatchCompletionResultSchema = z
+  .object({
+    threshold: z
+      .number()
+      .min(0)
+      .max(1)
+      .openapi({ description: "Watched fraction required to mark the lesson complete." }),
+    effectiveWatchedRatio: z.number().min(0).max(1),
+    lessonCompleted: z.boolean(),
+    completionAppliedThisRequest: z.boolean(),
+    lessonProgress: progressDtoSchema.nullable()
+  })
+  .openapi("LessonWatchCompletionResult");
 
 export const lessonPatchBodySchema = z
   .object({
@@ -539,6 +554,7 @@ export type LessonVideoPlaybackDto = z.infer<typeof lessonVideoPlaybackSchema>;
 export type LessonPlaybackDto = z.infer<typeof lessonPlaybackDtoSchema>;
 export type LessonWatchStateDto = z.infer<typeof lessonWatchStateDtoSchema>;
 export type LessonWatchStatePatchBody = z.infer<typeof lessonWatchStatePatchBodySchema>;
+export type LessonWatchCompletionResult = z.infer<typeof lessonWatchCompletionResultSchema>;
 export type LessonPatchBody = z.infer<typeof lessonPatchBodySchema>;
 export type LessonStaffDto = z.infer<typeof lessonStaffDtoSchema>;
 export type LessonReadingDto = z.infer<typeof lessonReadingDtoSchema>;
