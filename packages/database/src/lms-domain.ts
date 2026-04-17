@@ -1657,9 +1657,6 @@ export type StaffCourseOutlineLesson = {
   title: string;
   sortOrder: number;
   contentKind: "READING" | "VIDEO";
-  /** Sanitized HTML for READING lessons; null for VIDEO. */
-  content: string | null;
-  updatedAt: string;
 };
 
 export type StaffCourseOutlineModule = {
@@ -1732,9 +1729,7 @@ export async function listCourseLessonOutlineForStaff(input: {
           moduleId: true,
           title: true,
           sortOrder: true,
-          contentKind: true,
-          content: true,
-          updatedAt: true
+          contentKind: true
         }
       }
     }
@@ -1747,19 +1742,13 @@ export async function listCourseLessonOutlineForStaff(input: {
         id: m.id,
         title: m.title,
         sortOrder: m.sortOrder,
-        lessons: m.lessons.map((l) => {
-          const contentKind = l.contentKind === "VIDEO" ? "VIDEO" : "READING";
-          return {
-            id: l.id,
-            moduleId: l.moduleId,
-            title: l.title,
-            sortOrder: l.sortOrder,
-            contentKind,
-            content:
-              contentKind === "READING" ? lessonRowToReadingDto(l, input.courseId).html : null,
-            updatedAt: l.updatedAt.toISOString()
-          };
-        })
+        lessons: m.lessons.map((l) => ({
+          id: l.id,
+          moduleId: l.moduleId,
+          title: l.title,
+          sortOrder: l.sortOrder,
+          contentKind: l.contentKind === "VIDEO" ? "VIDEO" : "READING"
+        }))
       }))
     }
   };

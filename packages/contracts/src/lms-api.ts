@@ -271,10 +271,7 @@ export const staffCourseOutlineLessonSchema = z
     moduleId: z.string(),
     title: z.string(),
     sortOrder: z.number().int(),
-    contentKind: lessonContentKindSchema,
-    /** Sanitized reading HTML for READING lessons; null for VIDEO. */
-    content: z.string().nullable(),
-    updatedAt: isoDateTime
+    contentKind: lessonContentKindSchema
   })
   .openapi("StaffCourseOutlineLesson");
 

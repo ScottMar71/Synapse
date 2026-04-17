@@ -739,9 +739,7 @@ describe("staff course lesson outline", () => {
                       moduleId: "mod-1",
                       title: "Lesson 1",
                       sortOrder: 0,
-                      contentKind: "READING" as const,
-                      content: "<p>Hello</p>",
-                      updatedAt: "2026-04-17T12:00:00.000Z"
+                      contentKind: "READING" as const
                     }
                   ]
                 }
