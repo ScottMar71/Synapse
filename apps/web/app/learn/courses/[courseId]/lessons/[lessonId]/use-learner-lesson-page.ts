@@ -1,4 +1,4 @@
-import type { StaffCourseLessonOutlineDto } from "@conductor/contracts";
+import type { ProgressDto, StaffCourseLessonOutlineDto } from "@conductor/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchProgress, putProgress } from "../../../../../../lib/lms-api-client";
@@ -20,6 +20,7 @@ export function useLearnerLessonPage(courseId: string, lessonId: string): {
   markBusy: boolean;
   setMixedVideosReady: (v: boolean) => void;
   markComplete: () => Promise<boolean>;
+  refreshOutlineProgress: () => Promise<void>;
 } {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [lessonPercent, setLessonPercent] = useState(0);
@@ -63,6 +64,31 @@ export function useLearnerLessonPage(courseId: string, lessonId: string): {
     void load();
   }, [load]);
 
+  const refreshOutlineProgress = useCallback(async (): Promise<void> => {
+    const session = getSession();
+    const outlineDto = outlineDtoRef.current;
+    if (!session || !outlineDto || !courseId || !lessonId) {
+      return;
+    }
+    const progressRefresh = await fetchProgress(session, session.userId);
+    if (!progressRefresh.ok) {
+      return;
+    }
+    const row = progressRefresh.progress.find(
+      (p: ProgressDto) =>
+        p.courseId === courseId && p.scope === "LESSON" && p.lessonId === lessonId
+    );
+    setLessonPercent(row?.percent ?? 0);
+    const { lessonOutlineModules, navigationModules } = mapOutlineForLearner(
+      outlineDto,
+      courseId,
+      { currentLessonId: lessonId, progress: progressRefresh.progress }
+    );
+    setState((prev: LoadState) =>
+      prev.status === "ready" ? { ...prev, lessonOutlineModules, navigationModules } : prev
+    );
+  }, [courseId, lessonId]);
+
   const markComplete = useCallback(async (): Promise<boolean> => {
     const session = getSession();
     if (!session || !courseId || !lessonId) {
@@ -89,29 +115,19 @@ export function useLearnerLessonPage(courseId: string, lessonId: string): {
       setLessonPercent(result.progress.percent);
       setCompleteMessage("Lesson marked complete.");
 
-      const outlineDto = outlineDtoRef.current;
-      if (outlineDto) {
-        const progressRefresh = await fetchProgress(session, session.userId);
-        if (progressRefresh.ok) {
-          const { lessonOutlineModules, navigationModules } = mapOutlineForLearner(
-            outlineDto,
-            courseId,
-            { currentLessonId: lessonId, progress: progressRefresh.progress }
-          );
-          setState((prev: LoadState) =>
-            prev.status === "ready" ? { ...prev, lessonOutlineModules, navigationModules } : prev
-          );
-        }
-      }
+      await refreshOutlineProgress();
       return true;
     } finally {
       markingRef.current = false;
       setMarkBusy(false);
     }
-  }, [courseId, lessonId]);
+  }, [courseId, lessonId, refreshOutlineProgress]);
 
   useEffect(() => {
     if (state.status !== "ready") {
+      return;
+    }
+    if (state.variant === "video") {
       return;
     }
     if (lessonPercent >= 100) {
@@ -152,6 +168,7 @@ export function useLearnerLessonPage(courseId: string, lessonId: string): {
     completeError,
     markBusy,
     setMixedVideosReady,
-    markComplete
+    markComplete,
+    refreshOutlineProgress
   };
 }

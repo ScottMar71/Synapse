@@ -6,13 +6,15 @@ import {
   fetchLessonExternalLinks,
   fetchLessonGlossaryEntries,
   fetchLessonMixedBlocks,
+  fetchLessonPlayback,
   fetchLessonReading,
+  fetchLessonWatchState,
   fetchProgress
 } from "../../../../../../lib/lms-api-client";
 import type { LmsSession } from "../../../../../../lib/lms-session";
 import { findOutlineLesson, mapOutlineForLearner } from "../../learner-outline-map";
 
-import type { LoadState, ReadyMixed, ReadyReading } from "./learner-lesson-types";
+import type { LoadState, ReadyMixed, ReadyReading, ReadyVideo } from "./learner-lesson-types";
 
 export type LessonLoadFailure = { ok: false; message: string; clearOutline: boolean };
 
@@ -62,15 +64,6 @@ export async function loadLearnerLessonPageState(
     };
   }
 
-  if (outlineLesson.contentKind === "VIDEO") {
-    return {
-      ok: false,
-      message:
-        "Video-only lessons are not available in this player yet. Use the course outline to continue, or open a reading or mixed lesson.",
-      clearOutline: false
-    };
-  }
-
   const { lessonOutlineModules, navigationModules } = mapOutlineForLearner(
     outlineRes.outline,
     courseId,
@@ -85,6 +78,42 @@ export async function loadLearnerLessonPageState(
       p.courseId === courseId && p.scope === "LESSON" && p.lessonId === lessonId
   );
   const lessonPercent = row?.percent ?? 0;
+
+  if (outlineLesson.contentKind === "VIDEO") {
+    const [playbackRes, watchRes] = await Promise.all([
+      fetchLessonPlayback(session, courseId, lessonId),
+      fetchLessonWatchState(session, courseId, lessonId)
+    ]);
+    if (!playbackRes.ok) {
+      return { ok: false, message: playbackRes.error.message, clearOutline: false };
+    }
+    if (!playbackRes.playback.video) {
+      return {
+        ok: false,
+        message: "This video lesson is not configured with a playable asset yet.",
+        clearOutline: false
+      };
+    }
+    let resumeLoadWarning: string | null = null;
+    if (!watchRes.ok && watchRes.error.status !== 400) {
+      resumeLoadWarning = `Saved playback position could not be loaded (${watchRes.error.message}).`;
+    }
+    const initialWatchState = watchRes.ok ? watchRes.watchState : null;
+    const ready: ReadyVideo = {
+      status: "ready",
+      variant: "video",
+      courseTitle: courseRes.course.title,
+      lessonTitle: playbackRes.playback.lesson.title,
+      video: playbackRes.playback.video,
+      initialWatchState,
+      resumeLoadWarning,
+      lessonLinks: linksRes.links,
+      lessonGlossary,
+      lessonOutlineModules,
+      navigationModules
+    };
+    return { ok: true, lessonPercent, outline: outlineRes.outline, state: ready };
+  }
 
   if (outlineLesson.contentKind === "MIXED") {
     const blocksRes = await fetchLessonMixedBlocks(session, courseId, lessonId);

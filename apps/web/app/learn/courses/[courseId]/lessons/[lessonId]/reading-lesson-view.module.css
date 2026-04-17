@@ -194,3 +194,14 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-body-small);
 }
+
+.videoShell {
+  max-width: 65ch;
+  margin: 0 auto;
+}
+
+.saveWarning {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-danger, var(--color-text-primary));
+}

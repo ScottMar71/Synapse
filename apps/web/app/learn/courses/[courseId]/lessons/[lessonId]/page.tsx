@@ -13,6 +13,8 @@ import { useParams } from "next/navigation";
 import type { ReactElement } from "react";
 import { useMemo } from "react";
 
+import { getSession } from "../../../../../../lib/lms-session";
+import { LearnerVideoPanel } from "./learner-video-panel";
 import { NextLessonLink, NextOutlineLink } from "./learner-lesson-nav-links";
 import { LessonResourcesPanel } from "./lesson-resources-panel";
 import { MixedLessonSegments } from "./mixed-lesson-segments";
@@ -31,7 +33,8 @@ export default function LearnerLessonPage(): ReactElement {
     completeError,
     markBusy,
     setMixedVideosReady,
-    markComplete
+    markComplete,
+    refreshOutlineProgress
   } = useLearnerLessonPage(courseId, lessonId);
 
   const adjacent = useMemo(() => {
@@ -64,13 +67,24 @@ export default function LearnerLessonPage(): ReactElement {
   );
 
   const mainAriaLabel =
-    state.variant === "mixed" ? "Mixed lesson segments" : "Lesson reading";
+    state.variant === "mixed"
+      ? "Mixed lesson segments"
+      : state.variant === "video"
+        ? "Lesson video"
+        : "Lesson reading";
 
   const completionStatus = (() => {
     if (lessonComplete) {
       return (
         <p className={styles.status} role="status">
           You have completed this lesson.
+        </p>
+      );
+    }
+    if (state.variant === "video") {
+      return (
+        <p className={styles.status}>
+          Watch most of the video to record completion automatically, or use the button below.
         </p>
       );
     }
@@ -130,6 +144,29 @@ export default function LearnerLessonPage(): ReactElement {
             </p>
           )}
         </LessonViewerReadingMeasure>
+      ) : state.variant === "video" ? (
+        (() => {
+          const session = getSession();
+          return session ? (
+            <LearnerVideoPanel
+              key={`${lessonId}-${state.initialWatchState?.id ?? "none"}`}
+              session={session}
+              courseId={courseId}
+              lessonId={lessonId}
+              video={state.video}
+              initialWatchState={state.initialWatchState}
+              lessonComplete={lessonComplete}
+              lessonTitle={state.lessonTitle}
+              onWatchPatchResult={async (applied) => {
+                if (applied) {
+                  await refreshOutlineProgress();
+                }
+              }}
+            />
+          ) : (
+            <p role="alert">Session missing. Sign in again.</p>
+          );
+        })()
       ) : state.blocks.length === 0 ? (
         <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
           This mixed lesson does not have any segments yet.
@@ -157,6 +194,11 @@ export default function LearnerLessonPage(): ReactElement {
         </Button>
         {completionStatus}
       </div>
+      {state.variant === "video" && state.resumeLoadWarning ? (
+        <p className={styles.status} role="status">
+          {state.resumeLoadWarning}
+        </p>
+      ) : null}
       {completeMessage ? (
         <p className={styles.status} role="status" aria-live="polite">
           {completeMessage}

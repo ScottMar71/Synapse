@@ -1,7 +1,9 @@
 import type {
   LessonExternalLinkDto,
   LessonGlossaryEntryDto,
-  LessonMixedBlockLearner
+  LessonMixedBlockLearner,
+  LessonVideoPlaybackDto,
+  LessonWatchStateDto
 } from "@conductor/contracts";
 import type { LessonNavigationModule, LessonOutlineModule } from "@conductor/ui";
 
@@ -31,11 +33,26 @@ export type ReadyMixed = {
   navigationModules: LessonNavigationModule[];
 };
 
+export type ReadyVideo = {
+  status: "ready";
+  variant: "video";
+  courseTitle: string;
+  lessonTitle: string;
+  video: LessonVideoPlaybackDto;
+  initialWatchState: LessonWatchStateDto | null;
+  resumeLoadWarning: string | null;
+  lessonLinks: LessonExternalLinkDto[];
+  lessonGlossary: LessonGlossaryEntryDto[];
+  lessonOutlineModules: LessonOutlineModule[];
+  navigationModules: LessonNavigationModule[];
+};
+
 export type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | ReadyReading
-  | ReadyMixed;
+  | ReadyMixed
+  | ReadyVideo;
 
 export function sortLessonLinks(links: LessonExternalLinkDto[]): LessonExternalLinkDto[] {
   return [...links].sort((a, b) => {
