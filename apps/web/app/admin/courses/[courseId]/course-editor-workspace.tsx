@@ -23,6 +23,7 @@ import { ImageUploadBlock } from "./image-upload-block";
 import { LearningTimeAssistant } from "./learning-time-assistant";
 import { CourseEditorSummary } from "./course-editor-summary";
 import { LessonGlossaryEditor } from "./lesson-glossary-editor";
+import { LessonLinksEditor } from "./lesson-links-editor";
 import { ReadingLessonEditor } from "./reading-lesson-editor";
 import { ScormUploadBlock } from "./scorm-upload-block";
 import styles from "./course-wireframe.module.css";
@@ -225,6 +226,7 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
         {session ? (
           <>
             <ReadingLessonEditor session={session} courseId={courseId} />
+            <LessonLinksEditor session={session} courseId={courseId} />
             <LessonGlossaryEditor session={session} courseId={courseId} />
           </>
         ) : null}

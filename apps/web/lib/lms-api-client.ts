@@ -10,6 +10,9 @@ import type {
   LessonGlossaryCreateBody,
   LessonGlossaryEntryDto,
   LessonGlossaryPatchBody,
+  LessonExternalLinkCreateBody,
+  LessonExternalLinkDto,
+  LessonExternalLinkPatchBody,
   LessonReadingDto,
   LessonReadingPatchBody,
   ProgressDto,
@@ -232,6 +235,74 @@ export async function archiveLessonGlossaryEntry(
 ): Promise<{ ok: true } | { ok: false; error: ApiError }> {
   const response = await fetch(
     `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/glossary/${encodeURIComponent(entryId)}`,
+    { method: "DELETE", headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ archived: true }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true };
+}
+
+export async function fetchLessonExternalLinks(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; links: LessonExternalLinkDto[] } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/links`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ links: LessonExternalLinkDto[] }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, links: parsed.data.data.links };
+}
+
+export async function createLessonExternalLink(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  body: LessonExternalLinkCreateBody
+): Promise<{ ok: true; link: LessonExternalLinkDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/links`,
+    { method: "POST", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ link: LessonExternalLinkDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, link: parsed.data.data.link };
+}
+
+export async function patchLessonExternalLink(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  linkId: string,
+  body: LessonExternalLinkPatchBody
+): Promise<{ ok: true; link: LessonExternalLinkDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/links/${encodeURIComponent(linkId)}`,
+    { method: "PATCH", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ link: LessonExternalLinkDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, link: parsed.data.data.link };
+}
+
+export async function archiveLessonExternalLink(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  linkId: string
+): Promise<{ ok: true } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/links/${encodeURIComponent(linkId)}`,
     { method: "DELETE", headers: authHeaders(session) }
   );
   const parsed = await parseResponse<DataEnvelope<{ archived: true }>>(response);
