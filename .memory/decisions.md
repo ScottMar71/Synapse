@@ -83,3 +83,17 @@
 - Context: Reading/article lessons store rich HTML in `Lesson.content` and must not execute attacker-controlled markup in the learner app.
 - Decision: Sanitize with **`sanitize-html`** using an explicit **tag/attribute/URL scheme allowlist** in `packages/database/src/reading-html.ts`. Run sanitization on **staff save** (`patchLessonReadingForStaff`) and again on **learner read** (`getLessonReadingForViewer`). Document the approach in file header comments; OpenAPI describes the reading endpoints under `Lessons`.
 - Status: Active
+
+### 012 - Lesson video v1: content shape, native playback, watch table
+
+- Date: 2026-04-17
+- Context: Prisma already carries `Lesson.contentKind` and `Lesson.videoAsset` (JSON); reading HTML lives in `Lesson.content` (decision 011). Learners need resume + completion aligned with `Progress` and the shared `VideoPlayer` primitive. Conductor spike deliverable: **67e25387-a839-4c36-a680-d407779cc585**.
+- Decision (spike closure): **VIDEO asset** — shape matches **`lessonVideoAssetSchema`** / **`lessonStaffDtoSchema`** in `packages/contracts/src/lms-api.ts` (http(s) URLs, captions, poster). **v1 URLs** — HTTPS progressive MP4 or signed CDN. **Defer** HLS/DASH, DRM, iframe hosts (CSP `frame-src`, weaker completion semantics). **Playback** — native **`VideoPlayer`**; learner **`lessonPlaybackDtoSchema`**. **Resume** — add `lesson_watch_state` (`@@unique([tenantId, userId, lessonId])`, `positionSec`, optional `durationSec`, `updatedAt`; index `(tenantId, lessonId)`). Contract sketches only (no routes yet): **`lessonWatchStateDtoSchema`**, **`lessonWatchStatePatchBodySchema`**. **Completion** — `Progress` `LESSON`: at watched ratio ≥ configurable threshold (default **80%**), set `percent` + `completedAt` idempotently. **Client persistence** — debounced `timeupdate` (5–10s), `pause`, `ended`, `pagehide` / `beforeunload` flush.
+- Status: Active
+
+### 013 - Staff course lesson outline: metadata only
+
+- Date: 2026-04-17
+- Context: Staff need a lesson picker in the course editor; reading body and `updatedAt` belong on the reading DTO for optimistic concurrency (decision 011).
+- Decision: `GET .../lesson-outline` returns modules and lessons with **`id`, `moduleId`, `title`, `sortOrder`, `contentKind`** only. The admin reading editor loads HTML and version baseline via **`GET .../lessons/{lessonId}/reading`** when a READING lesson is selected.
+- Status: Active

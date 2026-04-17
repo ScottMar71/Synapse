@@ -14,6 +14,7 @@ import {
   learnerSummarySchema,
   lessonGlossaryCreateBodySchema,
   lessonGlossaryEntryDtoSchema,
+  lessonGlossaryPatchBodySchema,
   lessonReadingDtoSchema,
   lessonReadingPatchBodySchema,
   lmsApiTags,
@@ -23,11 +24,13 @@ import {
   progressReportRowsQuerySchema,
   progressReportSharedQuerySchema,
   progressReportSummaryDtoSchema,
+  staffCourseLessonOutlineDtoSchema,
   submissionDtoSchema,
   z
 } from "@conductor/contracts";
 import {
   archiveCourseCategory,
+  archiveLessonGlossaryEntryForStaff,
   createCourseCategory,
   createEnrollment,
   getCourseForViewer,
@@ -39,7 +42,9 @@ import {
   listCoursesInCategory,
   listEnrollmentsForUser,
   listLearnersForTenant,
+  listCourseLessonOutlineForStaff,
   listLessonGlossaryEntriesForViewer,
+  patchLessonGlossaryEntryForStaff,
   listProgressForUser,
   listPublishedCoursesForTenant,
   patchLessonReadingForStaff,
@@ -142,10 +147,13 @@ type DataAccess = {
   setCourseCategoryLinks: typeof setCourseCategoryLinks;
   removeCourseFromCategory: typeof removeCourseFromCategory;
   updateCourse: typeof updateCourse;
+  listCourseLessonOutlineForStaff: typeof listCourseLessonOutlineForStaff;
   getLessonReadingForViewer: typeof getLessonReadingForViewer;
   patchLessonReadingForStaff: typeof patchLessonReadingForStaff;
   listLessonGlossaryEntriesForViewer: typeof listLessonGlossaryEntriesForViewer;
   createLessonGlossaryEntry: typeof createLessonGlossaryEntry;
+  patchLessonGlossaryEntryForStaff: typeof patchLessonGlossaryEntryForStaff;
+  archiveLessonGlossaryEntryForStaff: typeof archiveLessonGlossaryEntryForStaff;
   getProgressReportSummary: typeof getProgressReportSummary;
   listProgressReportRows: typeof listProgressReportRows;
 };
@@ -207,10 +215,13 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     setCourseCategoryLinks,
     removeCourseFromCategory,
     updateCourse,
+    listCourseLessonOutlineForStaff,
     getLessonReadingForViewer,
     patchLessonReadingForStaff,
     listLessonGlossaryEntriesForViewer,
     createLessonGlossaryEntry,
+    patchLessonGlossaryEntryForStaff,
+    archiveLessonGlossaryEntryForStaff,
     getProgressReportSummary,
     listProgressReportRows,
     ...dependencies.dataAccess
@@ -300,6 +311,10 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
 
   const tenantCourseLessonParams = tenantCourseParams.extend({
     lessonId: z.string().min(1).openapi({ param: { name: "lessonId", in: "path" } })
+  });
+
+  const tenantCourseLessonGlossaryEntryParams = tenantCourseLessonParams.extend({
+    entryId: z.string().min(1).openapi({ param: { name: "entryId", in: "path" } })
   });
 
   const dataEnvelope = <T extends z.ZodType>(schema: T) =>
@@ -437,6 +452,54 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     return c.json({ data: { course: result.course } }, 200);
   });
 
+  const getStaffCourseLessonOutlineRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lesson-outline`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseParams },
+    responses: {
+      200: {
+        description: "Staff-only modules and lessons for authoring",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ outline: staffCourseLessonOutlineDtoSchema }))
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      403: {
+        description: "Forbidden",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      404: {
+        description: "Not found",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      }
+    }
+  });
+
+  app.openapi(getStaffCourseLessonOutlineRoute, async (c) => {
+    const { tenantId, courseId } = c.req.valid("param");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.listCourseLessonOutlineForStaff({
+      tenantId,
+      courseId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    return c.json({ data: { outline: result.outline } }, 200);
+  });
+
   const lessonReadingErrorResponses = {
     400: {
       description: "Bad request",
@@ -518,6 +581,10 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
           }
         }
       },
+      409: {
+        description: "Version conflict",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
       ...lessonReadingErrorResponses
     }
   });
@@ -535,7 +602,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       courseId,
       lessonId,
       roles: auth.roles,
-      patch: { title: body.title, content: body.content }
+      patch: { title: body.title, content: body.content, expectedUpdatedAt: body.expectedUpdatedAt }
     });
     if (!result.ok) {
       const mapped = mapServiceError(result.error);
@@ -557,7 +624,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     request: { params: tenantCourseLessonParams },
     responses: {
       200: {
-        description: "Lesson glossary entries (empty until glossary storage ships).",
+        description: "Lesson glossary entries (tenant-scoped; staff author; learners need enrollment).",
         content: {
           "application/json": {
             schema: dataEnvelope(z.object({ entries: z.array(lessonGlossaryEntryDtoSchema) }))
@@ -645,6 +712,105 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       resource: { courseId, lessonId, entryId: result.entry.id }
     });
     return c.json({ data: { entry: result.entry } }, 201);
+  });
+
+  const patchLessonGlossaryEntryRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/glossary/{entryId}`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonGlossaryEntryParams,
+      body: { content: { "application/json": { schema: lessonGlossaryPatchBodySchema } } }
+    },
+    responses: {
+      200: {
+        description: "Updated glossary entry",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ entry: lessonGlossaryEntryDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(patchLessonGlossaryEntryRoute, async (c) => {
+    const { tenantId, courseId, lessonId, entryId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.patchLessonGlossaryEntryForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      entryId,
+      roles: auth.roles,
+      patch: {
+        term: body.term,
+        definition: body.definition,
+        sortOrder: body.sortOrder
+      }
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_GLOSSARY_PATCH,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, entryId }
+    });
+    return c.json({ data: { entry: result.entry } }, 200);
+  });
+
+  const deleteLessonGlossaryEntryRoute = createRoute({
+    method: "delete",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/glossary/{entryId}`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonGlossaryEntryParams },
+    responses: {
+      200: {
+        description: "Glossary entry archived (hidden from learner lists)",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ archived: z.literal(true) }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(deleteLessonGlossaryEntryRoute, async (c) => {
+    const { tenantId, courseId, lessonId, entryId } = c.req.valid("param");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.archiveLessonGlossaryEntryForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      entryId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_GLOSSARY_ARCHIVE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, entryId }
+    });
+    return c.json({ data: { archived: true as const } }, 200);
   });
 
   const patchCourseRoute = createRoute({

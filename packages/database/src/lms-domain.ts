@@ -1647,7 +1647,112 @@ export type LessonReadingDto = {
   courseId: string;
   title: string;
   html: string | null;
+  contentKind: "READING" | "VIDEO";
+  updatedAt: string;
 };
+
+export type StaffCourseOutlineLesson = {
+  id: string;
+  moduleId: string;
+  title: string;
+  sortOrder: number;
+  contentKind: "READING" | "VIDEO";
+};
+
+export type StaffCourseOutlineModule = {
+  id: string;
+  title: string;
+  sortOrder: number;
+  lessons: StaffCourseOutlineLesson[];
+};
+
+export type StaffCourseLessonOutline = {
+  modules: StaffCourseOutlineModule[];
+};
+
+function lessonRowToReadingDto(
+  lesson: {
+    id: string;
+    title: string;
+    content: string | null;
+    contentKind: LessonContentKind;
+    updatedAt: Date;
+  },
+  courseId: string
+): LessonReadingDto {
+  const raw = lesson.content;
+  let html: string | null = null;
+  if (raw !== null && raw.trim() !== "") {
+    const sanitized = sanitizeReadingHtml(raw);
+    html = sanitized.trim() === "" ? null : sanitized;
+  }
+  return {
+    lessonId: lesson.id,
+    courseId,
+    title: lesson.title,
+    html,
+    contentKind: lesson.contentKind === "VIDEO" ? "VIDEO" : "READING",
+    updatedAt: lesson.updatedAt.toISOString()
+  };
+}
+
+export async function listCourseLessonOutlineForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; outline: StaffCourseLessonOutline } | { ok: false; error: ServiceError }> {
+  const staff = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!staff) {
+    return { ok: false, error: { code: "FORBIDDEN", message: "Lesson outline requires staff access" } };
+  }
+
+  const course = await prisma.course.findFirst({
+    where: { id: input.courseId, tenantId: input.tenantId },
+    select: { id: true }
+  });
+  if (!course) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Course not found" } };
+  }
+
+  const modules = await prisma.module.findMany({
+    where: { tenantId: input.tenantId, courseId: input.courseId, archivedAt: null },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      id: true,
+      title: true,
+      sortOrder: true,
+      lessons: {
+        where: { archivedAt: null },
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          moduleId: true,
+          title: true,
+          sortOrder: true,
+          contentKind: true
+        }
+      }
+    }
+  });
+
+  return {
+    ok: true,
+    outline: {
+      modules: modules.map((m) => ({
+        id: m.id,
+        title: m.title,
+        sortOrder: m.sortOrder,
+        lessons: m.lessons.map((l) => ({
+          id: l.id,
+          moduleId: l.moduleId,
+          title: l.title,
+          sortOrder: l.sortOrder,
+          contentKind: l.contentKind === "VIDEO" ? "VIDEO" : "READING"
+        }))
+      }))
+    }
+  };
+}
 
 export async function getLessonReadingForViewer(input: {
   tenantId: string;
@@ -1663,11 +1768,15 @@ export async function getLessonReadingForViewer(input: {
       archivedAt: null,
       module: { courseId: input.courseId, archivedAt: null }
     },
-    select: { id: true, title: true, content: true }
+    select: { id: true, title: true, content: true, contentKind: true, updatedAt: true }
   });
 
   if (!lesson) {
     return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  if (lesson.contentKind !== "READING") {
+    return { ok: false, error: { code: "BAD_REQUEST", message: "Lesson is not a reading lesson" } };
   }
 
   const courseAccess = await getCourseForViewer({
@@ -1698,26 +1807,16 @@ export async function getLessonReadingForViewer(input: {
   }
 
   const raw = lesson.content;
-  let html: string | null = null;
-  if (raw !== null && raw.trim() !== "") {
-    if (raw.length > READING_HTML_MAX_LENGTH) {
-      return {
-        ok: false,
-        error: { code: "INVALID_INPUT", message: "Lesson reading content is too large" }
-      };
-    }
-    const sanitized = sanitizeReadingHtml(raw);
-    html = sanitized.trim() === "" ? null : sanitized;
+  if (raw !== null && raw.trim() !== "" && raw.length > READING_HTML_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: { code: "INVALID_INPUT", message: "Lesson reading content is too large" }
+    };
   }
 
   return {
     ok: true,
-    reading: {
-      lessonId: lesson.id,
-      courseId: input.courseId,
-      title: lesson.title,
-      html
-    }
+    reading: lessonRowToReadingDto(lesson, input.courseId)
   };
 }
 
@@ -1726,7 +1825,7 @@ export async function patchLessonReadingForStaff(input: {
   courseId: string;
   lessonId: string;
   roles: MembershipRoleName[];
-  patch: { title?: string; content?: string | null };
+  patch: { title?: string; content?: string | null; expectedUpdatedAt: string };
 }): Promise<{ ok: true; reading: LessonReadingDto } | { ok: false; error: ServiceError }> {
   const gate = await assertStaffLessonInCourse(input);
   if (!gate.ok) {
@@ -1737,12 +1836,28 @@ export async function patchLessonReadingForStaff(input: {
     return { ok: false, error: { code: "INVALID_INPUT", message: "No fields to update" } };
   }
 
+  const expected = new Date(input.patch.expectedUpdatedAt);
+  if (Number.isNaN(expected.getTime())) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "expectedUpdatedAt is invalid" } };
+  }
+
   const existing = await prisma.lesson.findFirst({
     where: { id: input.lessonId, tenantId: input.tenantId, archivedAt: null },
-    select: { title: true, content: true }
+    select: { title: true, content: true, contentKind: true, updatedAt: true }
   });
   if (!existing) {
     return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  if (existing.contentKind !== "READING") {
+    return { ok: false, error: { code: "BAD_REQUEST", message: "Lesson is not a reading lesson" } };
+  }
+
+  if (existing.updatedAt.getTime() !== expected.getTime()) {
+    return {
+      ok: false,
+      error: { code: "CONFLICT", message: "Lesson was updated elsewhere; reload and try again" }
+    };
   }
 
   let nextTitle = existing.title;
@@ -1770,26 +1885,36 @@ export async function patchLessonReadingForStaff(input: {
     }
   }
 
-  const updated = await prisma.lesson.update({
-    where: { id: input.lessonId },
-    data: { title: nextTitle, content: nextContent },
-    select: { id: true, title: true, content: true }
+  const updated = await prisma.lesson.updateMany({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      updatedAt: expected,
+      contentKind: "READING",
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    data: { title: nextTitle, content: nextContent }
   });
 
-  let html: string | null = null;
-  if (updated.content !== null && updated.content.trim() !== "") {
-    const sanitized = sanitizeReadingHtml(updated.content);
-    html = sanitized.trim() === "" ? null : sanitized;
+  if (updated.count === 0) {
+    return {
+      ok: false,
+      error: { code: "CONFLICT", message: "Lesson was updated elsewhere; reload and try again" }
+    };
+  }
+
+  const row = await prisma.lesson.findFirst({
+    where: { id: input.lessonId, tenantId: input.tenantId },
+    select: { id: true, title: true, content: true, contentKind: true, updatedAt: true }
+  });
+  if (!row) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
   }
 
   return {
     ok: true,
-    reading: {
-      lessonId: updated.id,
-      courseId: input.courseId,
-      title: updated.title,
-      html
-    }
+    reading: lessonRowToReadingDto(row, input.courseId)
   };
 }
 
@@ -1804,6 +1929,30 @@ export type LessonGlossaryEntryDto = {
   createdAt: string;
   updatedAt: string;
 };
+
+function mapLessonGlossaryEntry(row: {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  term: string;
+  definition: string;
+  sortOrder: number;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): LessonGlossaryEntryDto {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    lessonId: row.lessonId,
+    term: row.term,
+    definition: row.definition,
+    sortOrder: row.sortOrder,
+    archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
 
 export async function listLessonGlossaryEntriesForViewer(input: {
   tenantId: string;
@@ -1852,7 +2001,23 @@ export async function listLessonGlossaryEntriesForViewer(input: {
     }
   }
 
-  return { ok: true, entries: [] };
+  const rows = await prisma.lessonGlossaryEntry.findMany({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      term: true,
+      definition: true,
+      sortOrder: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, entries: rows.map(mapLessonGlossaryEntry) };
 }
 
 export async function createLessonGlossaryEntry(input: {
@@ -1871,11 +2036,161 @@ export async function createLessonGlossaryEntry(input: {
   if (!gate.ok) {
     return gate;
   }
-  return {
-    ok: false,
-    error: {
-      code: "BAD_REQUEST",
-      message: "Glossary authoring is not available yet"
+
+  const term = input.body.term.trim();
+  const definition = input.body.definition.trim();
+  if (!term) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "Term cannot be empty" } };
+  }
+  if (!definition) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "Definition cannot be empty" } };
+  }
+
+  let sortOrder = input.body.sortOrder;
+  if (sortOrder === undefined) {
+    const agg = await prisma.lessonGlossaryEntry.aggregate({
+      where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+      _max: { sortOrder: true }
+    });
+    sortOrder = (agg._max.sortOrder ?? -1) + 1;
+  }
+
+  const created = await prisma.lessonGlossaryEntry.create({
+    data: {
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      term,
+      definition,
+      sortOrder
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      term: true,
+      definition: true,
+      sortOrder: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true
     }
-  };
+  });
+
+  return { ok: true, entry: mapLessonGlossaryEntry(created) };
+}
+
+export async function patchLessonGlossaryEntryForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  entryId: string;
+  roles: MembershipRoleName[];
+  patch: { term?: string; definition?: string; sortOrder?: number };
+}): Promise<{ ok: true; entry: LessonGlossaryEntryDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  if (input.patch.term === undefined && input.patch.definition === undefined && input.patch.sortOrder === undefined) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "No fields to update" } };
+  }
+
+  const existing = await prisma.lessonGlossaryEntry.findFirst({
+    where: {
+      id: input.entryId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      archivedAt: null
+    },
+    select: {
+      term: true,
+      definition: true,
+      sortOrder: true
+    }
+  });
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Glossary entry not found" } };
+  }
+
+  let nextTerm = existing.term;
+  if (input.patch.term !== undefined) {
+    const t = input.patch.term.trim();
+    if (!t) {
+      return { ok: false, error: { code: "INVALID_INPUT", message: "Term cannot be empty" } };
+    }
+    nextTerm = t;
+  }
+
+  let nextDefinition = existing.definition;
+  if (input.patch.definition !== undefined) {
+    const d = input.patch.definition.trim();
+    if (!d) {
+      return { ok: false, error: { code: "INVALID_INPUT", message: "Definition cannot be empty" } };
+    }
+    nextDefinition = d;
+  }
+
+  const nextSortOrder = input.patch.sortOrder ?? existing.sortOrder;
+
+  const updated = await prisma.lessonGlossaryEntry.update({
+    where: { id: input.entryId },
+    data: { term: nextTerm, definition: nextDefinition, sortOrder: nextSortOrder },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      term: true,
+      definition: true,
+      sortOrder: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, entry: mapLessonGlossaryEntry(updated) };
+}
+
+export async function archiveLessonGlossaryEntryForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  entryId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; archived: true } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const existing = await prisma.lessonGlossaryEntry.findFirst({
+    where: {
+      id: input.entryId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      archivedAt: null
+    },
+    select: { id: true }
+  });
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Glossary entry not found" } };
+  }
+
+  await prisma.lessonGlossaryEntry.update({
+    where: { id: input.entryId },
+    data: { archivedAt: new Date() }
+  });
+
+  return { ok: true, archived: true };
 }

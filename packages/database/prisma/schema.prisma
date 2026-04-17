@@ -62,6 +62,7 @@ model Tenant {
   enrollments      Enrollment[]
   assessments      Assessment[]
   auditEvents      AuditEvent[]
+  lessonGlossaryEntries LessonGlossaryEntry[]
 
   @@map("tenants")
 }
@@ -179,13 +180,33 @@ model Lesson {
   archivedAt  DateTime?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
-  module      Module            @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  progress    Progress[]
+  module            Module                @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress          Progress[]
+  glossaryEntries   LessonGlossaryEntry[]
 
   @@index([tenantId])
   @@index([moduleId])
   @@unique([moduleId, sortOrder])
   @@map("lessons")
+}
+
+model LessonGlossaryEntry {
+  id          String    @id @default(cuid())
+  tenantId    String
+  lessonId    String
+  term        String
+  definition  String
+  sortOrder   Int       @default(0)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([lessonId])
+  @@index([tenantId, lessonId])
+  @@map("lesson_glossary_entries")
 }
 
 model Enrollment {
