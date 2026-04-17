@@ -67,9 +67,11 @@ export function ReadingLessonEditor({ session, courseId }: ReadingLessonEditorPr
       const flat: OutlineOption[] = [];
       for (const m of res.outline.modules) {
         for (const l of m.lessons) {
+          const suffix =
+            l.contentKind === "VIDEO" ? " (video)" : l.contentKind === "MIXED" ? " (mixed)" : "";
           flat.push({
             lessonId: l.id,
-            label: `${m.title} — ${l.title}`,
+            label: `${m.title} — ${l.title}${suffix}`,
             contentKind: l.contentKind,
             lessonTitle: l.title
           });
@@ -238,7 +240,6 @@ export function ReadingLessonEditor({ session, courseId }: ReadingLessonEditorPr
           {options.map((o) => (
             <option key={o.lessonId} value={o.lessonId}>
               {o.label}
-              {o.contentKind === "VIDEO" ? " (video)" : ""}
             </option>
           ))}
         </select>
