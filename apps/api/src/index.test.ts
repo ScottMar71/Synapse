@@ -1614,6 +1614,172 @@ describe("lesson external link endpoints", () => {
   });
 });
 
+describe("lesson mixed blocks endpoints", () => {
+  const blocksPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/blocks`;
+
+  const sampleBlocks = [
+    {
+      id: "blk-1",
+      sortOrder: 0,
+      blockType: "READING" as const,
+      html: "<p>Hello</p>"
+    },
+    {
+      id: "blk-2",
+      sortOrder: 1,
+      blockType: "VIDEO" as const,
+      video: {
+        src: "https://example.com/video.mp4",
+        poster: null as string | null,
+        captions: [] as { src: string; label: string; srclang: string }[]
+      }
+    }
+  ];
+
+  it("returns blocks when data access succeeds for a learner", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async getLessonBlocksForViewer() {
+          return { ok: true, blocks: sampleBlocks };
+        }
+      }
+    });
+
+    const response = await app.request(blocksPath, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { blocks: { id: string }[] } };
+    expect(body.data.blocks).toHaveLength(2);
+    expect(body.data.blocks[0]?.id).toBe("blk-1");
+  });
+
+  it("denies PUT blocks for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async replaceLessonBlocksForStaff() {
+          throw new Error("replaceLessonBlocksForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(blocksPath, {
+      method: "PUT",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({
+        blocks: [
+          {
+            blockType: "READING",
+            reading: { html: "<p>x</p>" }
+          }
+        ]
+      })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff PUT blocks when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async replaceLessonBlocksForStaff() {
+          return { ok: true, blocks: [sampleBlocks[0]] };
+        }
+      }
+    });
+
+    const response = await app.request(blocksPath, {
+      method: "PUT",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({
+        blocks: [
+          {
+            blockType: "READING",
+            reading: { html: "<p>x</p>" }
+          }
+        ]
+      })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { blocks: { id: string }[] } };
+    expect(body.data.blocks).toHaveLength(1);
+    expect(body.data.blocks[0]?.id).toBe("blk-1");
+  });
+
+  it("does not call getLessonBlocksForViewer for cross-tenant requests", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async getLessonBlocksForViewer() {
+          throw new Error("getLessonBlocksForViewer should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/blocks`,
+      { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("does not call replaceLessonBlocksForStaff for cross-tenant PUT", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async replaceLessonBlocksForStaff() {
+          throw new Error("replaceLessonBlocksForStaff should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/blocks`,
+      {
+        method: "PUT",
+        headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+        body: JSON.stringify({ blocks: [] })
+      }
+    );
+    expect(response.status).toBe(403);
+  });
+});
+
 describe("lesson file endpoints", () => {
   const filesBase = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/files`;
 

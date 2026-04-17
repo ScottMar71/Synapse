@@ -36,6 +36,13 @@ enum ProgressScope {
 enum LessonContentKind {
   READING
   VIDEO
+  /// Ordered segments in `lesson_blocks` (reading + video segments); see migration notes.
+  MIXED
+}
+
+enum LessonBlockType {
+  READING
+  VIDEO
 }
 
 enum AuditAction {
@@ -65,6 +72,7 @@ model Tenant {
   lessonGlossaryEntries LessonGlossaryEntry[]
   lessonExternalLinks   LessonExternalLink[]
   lessonWatchStates     LessonWatchState[]
+  lessonBlocks          LessonBlock[]
 
   @@map("tenants")
 }
@@ -189,11 +197,31 @@ model Lesson {
   externalLinks     LessonExternalLink[]
   fileAttachments   LessonFileAttachment[]
   watchStates       LessonWatchState[]
+  blocks            LessonBlock[]
 
   @@index([tenantId])
   @@index([moduleId])
   @@unique([moduleId, sortOrder])
   @@map("lessons")
+}
+
+/// Ordered segment for a `MIXED` lesson. Payload: READING → `{ "html": string }`, VIDEO → `lessonVideoAsset` JSON shape.
+model LessonBlock {
+  id         String          @id @default(cuid())
+  tenantId   String
+  lessonId   String
+  sortOrder  Int             @default(0)
+  blockType  LessonBlockType
+  payload    Json
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lesson     Lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, sortOrder])
+  @@index([tenantId])
+  @@index([tenantId, lessonId])
+  @@map("lesson_blocks")
 }
 
 /// Per-learner resume cursor for video lessons (decision 012). Last-write-wins on PATCH (no version column).

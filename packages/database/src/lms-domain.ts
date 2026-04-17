@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   Prisma,
   type EnrollmentStatus,
+  type LessonBlockType,
   type LessonContentKind,
   type ProgressScope,
   type SubmissionStatus
@@ -1307,11 +1308,33 @@ export type LessonVideoAssetDto = {
   captions?: LessonVideoCaptionTrackDto[];
 };
 
+export type LessonMixedBlockLearnerDto =
+  | {
+      id: string;
+      sortOrder: number;
+      blockType: "READING";
+      html: string | null;
+    }
+  | {
+      id: string;
+      sortOrder: number;
+      blockType: "VIDEO";
+      video: {
+        src: string;
+        poster: string | null;
+        captions: LessonVideoCaptionTrackDto[];
+      };
+    };
+
+export type LessonMixedBlockPutItem =
+  | { blockType: "READING"; reading: { html: string } }
+  | { blockType: "VIDEO"; video: LessonVideoAssetDto };
+
 export type LessonPlaybackDto = {
   lesson: {
     id: string;
     title: string;
-    contentKind: "READING" | "VIDEO";
+    contentKind: "READING" | "VIDEO" | "MIXED";
     readingContent: string | null;
   };
   video: {
@@ -1319,15 +1342,26 @@ export type LessonPlaybackDto = {
     poster: string | null;
     captions: LessonVideoCaptionTrackDto[];
   } | null;
+  blocks?: LessonMixedBlockLearnerDto[];
 };
 
 export type LessonStaffDto = {
   id: string;
   title: string;
-  contentKind: "READING" | "VIDEO";
+  contentKind: "READING" | "VIDEO" | "MIXED";
   content: string | null;
   videoAsset: LessonVideoAssetDto | null;
 };
+
+function mapLessonContentKindToApi(kind: LessonContentKind): "READING" | "VIDEO" | "MIXED" {
+  if (kind === "VIDEO") {
+    return "VIDEO";
+  }
+  if (kind === "MIXED") {
+    return "MIXED";
+  }
+  return "READING";
+}
 
 function isHttpUrl(raw: string): boolean {
   try {
@@ -1418,10 +1452,60 @@ function toLessonStaffDto(row: {
   return {
     id: row.id,
     title: row.title,
-    contentKind: row.contentKind === "VIDEO" ? "VIDEO" : "READING",
+    contentKind: mapLessonContentKindToApi(row.contentKind),
     content: row.content,
     videoAsset: parseVideoAssetFromDb(row.videoAsset)
   };
+}
+
+function lessonBlockRowToLearnerDto(row: {
+  id: string;
+  sortOrder: number;
+  blockType: LessonBlockType;
+  payload: Prisma.JsonValue;
+}): LessonMixedBlockLearnerDto | null {
+  if (row.blockType === "READING") {
+    if (row.payload === null || typeof row.payload !== "object" || Array.isArray(row.payload)) {
+      return null;
+    }
+    const htmlRaw = (row.payload as Record<string, unknown>).html;
+    if (typeof htmlRaw !== "string") {
+      return null;
+    }
+    if (htmlRaw.length > LESSON_BODY_MAX_LENGTH) {
+      return null;
+    }
+    const sanitized = sanitizeReadingHtml(htmlRaw);
+    const html = sanitized.trim() === "" ? null : sanitized;
+    return {
+      id: row.id,
+      sortOrder: row.sortOrder,
+      blockType: "READING",
+      html
+    };
+  }
+
+  const asset = parseVideoAssetFromDb(row.payload);
+  if (!asset) {
+    return null;
+  }
+  return {
+    id: row.id,
+    sortOrder: row.sortOrder,
+    blockType: "VIDEO",
+    video: {
+      src: asset.sourceUrl,
+      poster: asset.posterUrl ?? null,
+      captions: asset.captions ?? []
+    }
+  };
+}
+
+function mixedBlockPutItemToPayload(item: LessonMixedBlockPutItem): Prisma.InputJsonValue {
+  if (item.blockType === "READING") {
+    return { html: item.reading.html } as Prisma.InputJsonValue;
+  }
+  return videoAssetToJson(item.video);
 }
 
 export async function assertStaffLessonInCourse(input: {
@@ -1503,7 +1587,7 @@ export async function getLessonPlaybackForViewer(input: {
     }
   }
 
-  const contentKind: "READING" | "VIDEO" = lesson.contentKind === "VIDEO" ? "VIDEO" : "READING";
+  const contentKind = mapLessonContentKindToApi(lesson.contentKind);
   let video: LessonPlaybackDto["video"] = null;
   if (contentKind === "VIDEO") {
     const asset = parseVideoAssetFromDb(lesson.videoAsset);
@@ -1518,7 +1602,45 @@ export async function getLessonPlaybackForViewer(input: {
   }
 
   const raw = lesson.content;
-  const readingContent = raw === null || raw.trim() === "" ? null : raw;
+  const readingContent =
+    contentKind === "MIXED" ? null : raw === null || raw.trim() === "" ? null : raw;
+
+  if (contentKind === "MIXED") {
+    const blockRows = await prisma.lessonBlock.findMany({
+      where: { tenantId: input.tenantId, lessonId: input.lessonId },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true,
+        sortOrder: true,
+        blockType: true,
+        payload: true
+      }
+    });
+    const blocks: LessonMixedBlockLearnerDto[] = [];
+    for (const row of blockRows) {
+      const dto = lessonBlockRowToLearnerDto(row);
+      if (!dto) {
+        return {
+          ok: false,
+          error: { code: "NOT_FOUND", message: "Mixed lesson has a misconfigured block" }
+        };
+      }
+      blocks.push(dto);
+    }
+    return {
+      ok: true,
+      playback: {
+        lesson: {
+          id: lesson.id,
+          title: lesson.title,
+          contentKind,
+          readingContent: null
+        },
+        video: null,
+        blocks
+      }
+    };
+  }
 
   return {
     ok: true,
@@ -1542,7 +1664,7 @@ export async function patchLessonForStaff(input: {
   patch: {
     title?: string;
     content?: string | null;
-    contentKind?: "READING" | "VIDEO";
+    contentKind?: "READING" | "VIDEO" | "MIXED";
     videoAsset?: LessonVideoAssetDto | null;
   };
 }): Promise<{ ok: true; lesson: LessonStaffDto } | { ok: false; error: ServiceError }> {
@@ -1594,16 +1716,14 @@ export async function patchLessonForStaff(input: {
     }
   }
 
-  const nextKind: "READING" | "VIDEO" =
+  const nextKind: LessonContentKind =
     input.patch.contentKind !== undefined
       ? input.patch.contentKind
-      : existing.contentKind === "VIDEO"
-        ? "VIDEO"
-        : "READING";
+      : existing.contentKind;
 
   let nextVideoValue: Prisma.InputJsonValue | typeof Prisma.JsonNull;
 
-  if (nextKind === "READING") {
+  if (nextKind === "READING" || nextKind === "MIXED") {
     nextVideoValue = Prisma.JsonNull;
   } else if (input.patch.videoAsset !== undefined) {
     if (input.patch.videoAsset === null) {
@@ -1624,24 +1744,204 @@ export async function patchLessonForStaff(input: {
     nextVideoValue = videoAssetToJson(parsed);
   }
 
-  const updated = await prisma.lesson.update({
-    where: { id: input.lessonId },
-    data: {
-      title: nextTitle,
-      content: nextContent,
-      contentKind: nextKind,
-      videoAsset: nextVideoValue
-    },
-    select: {
-      id: true,
-      title: true,
-      content: true,
-      contentKind: true,
-      videoAsset: true
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.lesson.update({
+      where: { id: input.lessonId },
+      data: {
+        title: nextTitle,
+        content: nextContent,
+        contentKind: nextKind,
+        videoAsset: nextVideoValue
+      },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        contentKind: true,
+        videoAsset: true
+      }
+    });
+    if (nextKind !== "MIXED") {
+      await tx.lessonBlock.deleteMany({
+        where: { lessonId: input.lessonId, tenantId: input.tenantId }
+      });
     }
+    return row;
   });
 
   return { ok: true, lesson: toLessonStaffDto(updated) };
+}
+
+export async function replaceLessonBlocksForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+  blocks: LessonMixedBlockPutItem[];
+}): Promise<{ ok: true; blocks: LessonMixedBlockLearnerDto[] } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse(input);
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true, contentKind: true }
+  });
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+  if (lesson.contentKind !== "MIXED") {
+    return {
+      ok: false,
+      error: {
+        code: "BAD_REQUEST",
+        message: "Lesson blocks can only be edited when contentKind is MIXED"
+      }
+    };
+  }
+
+  for (const item of input.blocks) {
+    if (item.blockType === "READING") {
+      if (item.reading.html.length > LESSON_BODY_MAX_LENGTH) {
+        return {
+          ok: false,
+          error: { code: "INVALID_INPUT", message: "Reading block HTML is too large" }
+        };
+      }
+    }
+  }
+
+  const rows = await prisma.$transaction(async (tx) => {
+    await tx.lessonBlock.deleteMany({
+      where: { lessonId: input.lessonId, tenantId: input.tenantId }
+    });
+    for (let i = 0; i < input.blocks.length; i++) {
+      const item = input.blocks[i];
+      if (!item) {
+        continue;
+      }
+      await tx.lessonBlock.create({
+        data: {
+          tenantId: input.tenantId,
+          lessonId: input.lessonId,
+          sortOrder: i,
+          blockType: item.blockType,
+          payload: mixedBlockPutItemToPayload(item)
+        }
+      });
+    }
+    return tx.lessonBlock.findMany({
+      where: { lessonId: input.lessonId, tenantId: input.tenantId },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true,
+        sortOrder: true,
+        blockType: true,
+        payload: true
+      }
+    });
+  });
+
+  const blocks: LessonMixedBlockLearnerDto[] = [];
+  for (const row of rows) {
+    const dto = lessonBlockRowToLearnerDto(row);
+    if (!dto) {
+      return {
+        ok: false,
+        error: { code: "INVALID_INPUT", message: "Stored lesson block failed validation" }
+      };
+    }
+    blocks.push(dto);
+  }
+
+  return { ok: true, blocks };
+}
+
+export async function getLessonBlocksForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; blocks: LessonMixedBlockLearnerDto[] } | { ok: false; error: ServiceError }> {
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true, contentKind: true }
+  });
+
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  if (lesson.contentKind !== "MIXED") {
+    return {
+      ok: false,
+      error: { code: "BAD_REQUEST", message: "Lesson is not a mixed lesson" }
+    };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const blockRows = await prisma.lessonBlock.findMany({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      id: true,
+      sortOrder: true,
+      blockType: true,
+      payload: true
+    }
+  });
+
+  const blocks: LessonMixedBlockLearnerDto[] = [];
+  for (const row of blockRows) {
+    const dto = lessonBlockRowToLearnerDto(row);
+    if (!dto) {
+      return {
+        ok: false,
+        error: { code: "NOT_FOUND", message: "Mixed lesson has a misconfigured block" }
+      };
+    }
+    blocks.push(dto);
+  }
+
+  return { ok: true, blocks };
 }
 
 
@@ -1650,7 +1950,7 @@ export type LessonReadingDto = {
   courseId: string;
   title: string;
   html: string | null;
-  contentKind: "READING" | "VIDEO";
+  contentKind: "READING" | "VIDEO" | "MIXED";
   updatedAt: string;
 };
 
@@ -1659,7 +1959,7 @@ export type StaffCourseOutlineLesson = {
   moduleId: string;
   title: string;
   sortOrder: number;
-  contentKind: "READING" | "VIDEO";
+  contentKind: "READING" | "VIDEO" | "MIXED";
 };
 
 export type StaffCourseOutlineModule = {
@@ -1694,7 +1994,7 @@ function lessonRowToReadingDto(
     courseId,
     title: lesson.title,
     html,
-    contentKind: lesson.contentKind === "VIDEO" ? "VIDEO" : "READING",
+    contentKind: mapLessonContentKindToApi(lesson.contentKind),
     updatedAt: lesson.updatedAt.toISOString()
   };
 }
@@ -1741,7 +2041,7 @@ async function loadCourseLessonOutlineModules(
       moduleId: l.moduleId,
       title: l.title,
       sortOrder: l.sortOrder,
-      contentKind: l.contentKind === "VIDEO" ? "VIDEO" : "READING"
+      contentKind: mapLessonContentKindToApi(l.contentKind)
     }))
   }));
 }

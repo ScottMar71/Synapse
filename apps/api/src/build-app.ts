@@ -27,8 +27,12 @@ import {
   lessonWatchCompletionResultSchema,
   lessonWatchStateDtoSchema,
   lessonWatchStatePatchBodySchema,
+  lessonMixedBlocksDataSchema,
+  lessonMixedBlocksPutBodySchema,
+  lessonPatchBodySchema,
   lessonReadingDtoSchema,
   lessonReadingPatchBodySchema,
+  lessonStaffDtoSchema,
   lmsApiTags,
   progressDtoSchema,
   progressPutBodySchema,
@@ -52,6 +56,7 @@ import {
   createLessonGlossaryEntry,
   getActiveMembershipRoles,
   getLessonFileDownloadForViewer,
+  getLessonBlocksForViewer,
   getLessonReadingForViewer,
   getLessonWatchStateForViewer,
   initLessonFileUploadForStaff,
@@ -71,10 +76,12 @@ import {
   patchLessonGlossaryEntryForStaff,
   listProgressForUser,
   listPublishedCoursesForTenant,
+  patchLessonForStaff,
   patchLessonReadingForStaff,
   patchLessonWatchStateForViewer,
   provisionLearnerForTenant,
   removeCourseFromCategory,
+  replaceLessonBlocksForStaff,
   reorderLessonFileAttachmentsForStaff,
   setCourseCategoryLinks,
   submitAssessmentAttempt,
@@ -175,8 +182,11 @@ type DataAccess = {
   updateCourse: typeof updateCourse;
   listCourseLessonOutlineForStaff: typeof listCourseLessonOutlineForStaff;
   listCourseLessonOutlineForViewer: typeof listCourseLessonOutlineForViewer;
+  patchLessonForStaff: typeof patchLessonForStaff;
   getLessonReadingForViewer: typeof getLessonReadingForViewer;
   patchLessonReadingForStaff: typeof patchLessonReadingForStaff;
+  getLessonBlocksForViewer: typeof getLessonBlocksForViewer;
+  replaceLessonBlocksForStaff: typeof replaceLessonBlocksForStaff;
   getLessonWatchStateForViewer: typeof getLessonWatchStateForViewer;
   patchLessonWatchStateForViewer: typeof patchLessonWatchStateForViewer;
   listLessonGlossaryEntriesForViewer: typeof listLessonGlossaryEntriesForViewer;
@@ -256,8 +266,11 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     updateCourse,
     listCourseLessonOutlineForStaff,
     listCourseLessonOutlineForViewer,
+    patchLessonForStaff,
     getLessonReadingForViewer,
     patchLessonReadingForStaff,
+    getLessonBlocksForViewer,
+    replaceLessonBlocksForStaff,
     getLessonWatchStateForViewer,
     patchLessonWatchStateForViewer,
     listLessonGlossaryEntriesForViewer,
@@ -797,6 +810,156 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       { data: { watchState: result.watchState, completion: result.completion } },
       200
     );
+  });
+
+  const patchLessonRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonPatchBodySchema } } }
+    },
+    responses: {
+      200: {
+        description:
+          "Staff metadata patch (title, contentKind, top-level reading body, video asset). Switching away from MIXED deletes all `lesson_blocks` rows for the lesson.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ lesson: lessonStaffDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(patchLessonRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.patchLessonForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles,
+      patch: {
+        title: body.title,
+        content: body.content,
+        contentKind: body.contentKind,
+        videoAsset: body.videoAsset
+      }
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_PATCH,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+    return c.json({ data: { lesson: result.lesson } }, 200);
+  });
+
+  const getLessonBlocksRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/blocks`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description:
+          "Ordered mixed-lesson segments (reading HTML sanitized; video as playback DTO). Requires `contentKind === MIXED`. Staff may preview; learners need enrollment.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(lessonMixedBlocksDataSchema)
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(getLessonBlocksRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.getLessonBlocksForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_BLOCKS_LIST_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, blockCount: result.blocks.length }
+    });
+    return c.json({ data: { blocks: result.blocks } }, 200);
+  });
+
+  const putLessonBlocksRoute = createRoute({
+    method: "put",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/blocks`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonMixedBlocksPutBodySchema } } }
+    },
+    responses: {
+      200: {
+        description:
+          "Replaces all blocks for a MIXED lesson (full list, ordered by array position). Empty list clears segments.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(lessonMixedBlocksDataSchema)
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(putLessonBlocksRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.replaceLessonBlocksForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles,
+      blocks: body.blocks
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_BLOCKS_PUT,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, blockCount: result.blocks.length }
+    });
+    return c.json({ data: { blocks: result.blocks } }, 200);
   });
 
   const listLessonGlossaryRoute = createRoute({
