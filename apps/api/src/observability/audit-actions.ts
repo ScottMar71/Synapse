@@ -28,5 +28,11 @@ export const AUDIT_ACTIONS = {
   LESSON_FILE_DOWNLOAD: "lesson.file_download",
   LESSON_FILE_REORDER: "lesson.file_reorder",
   LESSON_FILE_PATCH: "lesson.file_patch",
-  LESSON_FILE_ARCHIVE: "lesson.file_archive"
+  LESSON_FILE_ARCHIVE: "lesson.file_archive",
+  SCORM_PACKAGE_UPLOAD_INIT: "lesson.scorm_package_upload_init",
+  SCORM_PACKAGE_PROCESS: "lesson.scorm_package_process",
+  SCORM_PACKAGE_READ: "lesson.scorm_package_read",
+  SCORM_RUNTIME_READ: "lesson.scorm_runtime_read",
+  SCORM_SESSION_READ: "lesson.scorm_session_read",
+  SCORM_SESSION_PATCH: "lesson.scorm_session_patch"
 } as const;
