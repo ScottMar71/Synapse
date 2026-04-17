@@ -41,7 +41,10 @@ export type ReadyVideo = {
   variant: "video";
   courseTitle: string;
   lessonTitle: string;
-  video: LessonVideoPlaybackDto;
+  /** Present when playback API returned a playable asset; otherwise see `playbackUnavailableMessage`. */
+  video: LessonVideoPlaybackDto | null;
+  /** Shown in the main stage when `video` is null (missing asset, fetch error, etc.). */
+  playbackUnavailableMessage: string | null;
   initialWatchState: LessonWatchStateDto | null;
   resumeLoadWarning: string | null;
   lessonFiles: LessonFileAttachmentDto[];

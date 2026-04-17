@@ -1,4 +1,9 @@
-import type { ProgressDto, StaffCourseLessonOutlineDto } from "@conductor/contracts";
+import type {
+  LessonVideoPlaybackDto,
+  LessonWatchStateDto,
+  ProgressDto,
+  StaffCourseLessonOutlineDto
+} from "@conductor/contracts";
 
 import {
   fetchCourse,
@@ -92,31 +97,39 @@ export async function loadLearnerLessonPageState(
   const lessonPercent = row?.percent ?? 0;
 
   if (outlineLesson.contentKind === "VIDEO") {
-    const [playbackRes, watchRes] = await Promise.all([
-      fetchLessonPlayback(session, courseId, lessonId),
-      fetchLessonWatchState(session, courseId, lessonId)
-    ]);
-    if (!playbackRes.ok) {
-      return { ok: false, message: playbackRes.error.message, clearOutline: false };
-    }
-    if (!playbackRes.playback.video) {
-      return {
-        ok: false,
-        message: "This video lesson is not configured with a playable asset yet.",
-        clearOutline: false
-      };
-    }
+    const playbackRes = await fetchLessonPlayback(session, courseId, lessonId);
+
+    let video: LessonVideoPlaybackDto | null = null;
+    let playbackUnavailableMessage: string | null = null;
+    let lessonTitle = outlineLesson.title;
+    let initialWatchState: LessonWatchStateDto | null = null;
     let resumeLoadWarning: string | null = null;
-    if (!watchRes.ok && watchRes.error.status !== 400) {
-      resumeLoadWarning = `Saved playback position could not be loaded (${watchRes.error.message}).`;
+
+    if (!playbackRes.ok) {
+      playbackUnavailableMessage = playbackRes.error.message;
+    } else {
+      lessonTitle = playbackRes.playback.lesson.title;
+      if (!playbackRes.playback.video) {
+        playbackUnavailableMessage =
+          "This video lesson is not configured with a playable asset yet.";
+      } else {
+        video = playbackRes.playback.video;
+        playbackUnavailableMessage = null;
+        const watchRes = await fetchLessonWatchState(session, courseId, lessonId);
+        if (!watchRes.ok && watchRes.error.status !== 400) {
+          resumeLoadWarning = `Saved playback position could not be loaded (${watchRes.error.message}).`;
+        }
+        initialWatchState = watchRes.ok ? watchRes.watchState : null;
+      }
     }
-    const initialWatchState = watchRes.ok ? watchRes.watchState : null;
+
     const ready: ReadyVideo = {
       status: "ready",
       variant: "video",
       courseTitle: courseRes.course.title,
-      lessonTitle: playbackRes.playback.lesson.title,
-      video: playbackRes.playback.video,
+      lessonTitle,
+      video,
+      playbackUnavailableMessage,
       initialWatchState,
       resumeLoadWarning,
       lessonFiles,
