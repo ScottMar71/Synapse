@@ -102,6 +102,14 @@
   box-shadow: var(--shadow-focus);
 }
 
+.resourcesSlot {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+
 .mainLandmark {
   min-width: 0;
 }

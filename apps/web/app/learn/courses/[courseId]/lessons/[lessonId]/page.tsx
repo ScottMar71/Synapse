@@ -6,6 +6,7 @@ import {
   LessonOutline,
   LessonViewerLayout,
   LessonViewerReadingMeasure,
+  Link as UiLink,
   getAdjacentLessonsByModuleOrder
 } from "@conductor/ui";
 import Link from "next/link";
@@ -13,11 +14,16 @@ import { useParams } from "next/navigation";
 import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { ProgressDto, StaffCourseLessonOutlineDto } from "@conductor/contracts";
+import type {
+  LessonExternalLinkDto,
+  ProgressDto,
+  StaffCourseLessonOutlineDto
+} from "@conductor/contracts";
 
 import {
   fetchCourse,
   fetchCourseLessonOutline,
+  fetchLessonExternalLinks,
   fetchLessonReading,
   fetchProgress,
   putProgress
@@ -72,9 +78,19 @@ type LoadState =
       courseTitle: string;
       lessonTitle: string;
       html: string | null;
+      lessonLinks: LessonExternalLinkDto[];
       lessonOutlineModules: ReturnType<typeof mapOutlineForLearner>["lessonOutlineModules"];
       navigationModules: ReturnType<typeof mapOutlineForLearner>["navigationModules"];
     };
+
+function sortLessonLinks(links: LessonExternalLinkDto[]): LessonExternalLinkDto[] {
+  return [...links].sort((a, b) => {
+    if (a.sortOrder !== b.sortOrder) {
+      return a.sortOrder - b.sortOrder;
+    }
+    return a.id.localeCompare(b.id);
+  });
+}
 
 export default function LearnerReadingLessonPage(): ReactElement {
   const params = useParams();
@@ -104,11 +120,12 @@ export default function LearnerReadingLessonPage(): ReactElement {
     setCompleteMessage(null);
     setCompleteError(null);
 
-    const [courseRes, outlineRes, readingRes, progressRes] = await Promise.all([
+    const [courseRes, outlineRes, readingRes, progressRes, linksRes] = await Promise.all([
       fetchCourse(session, courseId),
       fetchCourseLessonOutline(session, courseId),
       fetchLessonReading(session, courseId, lessonId),
-      fetchProgress(session, session.userId)
+      fetchProgress(session, session.userId),
+      fetchLessonExternalLinks(session, courseId, lessonId)
     ]);
 
     if (!courseRes.ok) {
@@ -137,6 +154,10 @@ export default function LearnerReadingLessonPage(): ReactElement {
       setState({ status: "error", message: readingRes.error.message });
       return;
     }
+    if (!linksRes.ok) {
+      setState({ status: "error", message: linksRes.error.message });
+      return;
+    }
 
     const reading = readingRes.reading;
     const { lessonOutlineModules, navigationModules } = mapOutlineForLearner(
@@ -160,6 +181,7 @@ export default function LearnerReadingLessonPage(): ReactElement {
       courseTitle: courseRes.course.title,
       lessonTitle: reading.title,
       html: reading.html,
+      lessonLinks: linksRes.links,
       lessonOutlineModules,
       navigationModules
     });
@@ -269,6 +291,30 @@ export default function LearnerReadingLessonPage(): ReactElement {
 
   const lessonComplete = lessonPercent >= 100;
 
+  const sortedLessonLinks = sortLessonLinks(state.lessonLinks);
+  const resourcesPanel =
+    sortedLessonLinks.length === 0 ? undefined : (
+      <section aria-labelledby="lesson-resources-heading">
+        <h2 id="lesson-resources-heading" className={styles.resourcesHeading}>
+          Resources
+        </h2>
+        <ul className={styles.resourceList}>
+          {sortedLessonLinks.map((link) => (
+            <li key={link.id} className={styles.resourceItem}>
+              <div className={styles.resourceRow}>
+                <UiLink href={link.url} external variant="default">
+                  {link.title}
+                </UiLink>
+              </div>
+              {link.description ? (
+                <p className={styles.resourceDescription}>{link.description}</p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+
   return (
     <LessonViewerLayout
       breadcrumbItems={[
@@ -293,6 +339,7 @@ export default function LearnerReadingLessonPage(): ReactElement {
           ? { label: `Next: ${adjacent.next.title}`, href: adjacent.next.href }
           : null
       }
+      resources={resourcesPanel}
       mainAriaLabel="Lesson reading"
     >
       <LessonViewerReadingMeasure>
