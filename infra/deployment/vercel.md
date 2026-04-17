@@ -44,3 +44,16 @@ Point the web project at `www.example.com` and the API at `api.example.com`. Set
 
 - Builds are pinned with `npm ci` from the **repository root** so workspace packages resolve consistently.
 - Root `package.json` defines `build:vercel-web` and `build:vercel-api` for explicit build order.
+
+## 5. Preview URL returns 401 “Authentication Required”
+
+If `https://<project>-<team>-<hash>-projects.vercel.app` (or another preview URL) returns **401** with an HTML page titled **Authentication Required** and `Set-Cookie: _vercel_sso_nonce`, the deployment is being blocked by **Vercel Deployment Protection** (usually **Vercel Authentication**), not by this app. Middleware in `apps/web` redirects unauthenticated users to `/sign-in`; it does not emit that page.
+
+**To allow people without a Vercel login to open previews** (e.g. sharing with stakeholders):
+
+1. Vercel Dashboard → select the **web** (or **api**) project → **Settings** → **Deployment Protection**.
+2. Adjust protection for **Preview** deployments: turn off Vercel Authentication for previews, use **only production** protection, or add a **[Deployment Protection Exception](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/deployment-protection-exceptions)** for a specific preview hostname.
+
+**Team members** who should keep protection enabled can use [`vercel curl`](https://vercel.com/docs/cli/curl) or sign in via the SSO redirect. **Automation** can use a [protection bypass](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) secret (query param or header), which is appropriate for CI—not for publishing a public demo URL.
+
+There is no `vercel.json` setting in this repo that disables Deployment Protection; it is configured on the Vercel project (or inherited from the team).
