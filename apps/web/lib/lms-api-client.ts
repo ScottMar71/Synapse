@@ -7,6 +7,9 @@ import type {
   CoursePatchBody,
   EnrollmentDto,
   LearnerProvisionBody,
+  LessonGlossaryCreateBody,
+  LessonGlossaryEntryDto,
+  LessonGlossaryPatchBody,
   LessonReadingDto,
   LessonReadingPatchBody,
   ProgressDto,
@@ -168,6 +171,74 @@ export async function patchLessonReadingForStaff(
     return parsed;
   }
   return { ok: true, reading: parsed.data.data.reading };
+}
+
+export async function fetchLessonGlossaryEntries(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; entries: LessonGlossaryEntryDto[] } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/glossary`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ entries: LessonGlossaryEntryDto[] }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, entries: parsed.data.data.entries };
+}
+
+export async function createLessonGlossaryEntry(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  body: LessonGlossaryCreateBody
+): Promise<{ ok: true; entry: LessonGlossaryEntryDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/glossary`,
+    { method: "POST", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ entry: LessonGlossaryEntryDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, entry: parsed.data.data.entry };
+}
+
+export async function patchLessonGlossaryEntry(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  entryId: string,
+  body: LessonGlossaryPatchBody
+): Promise<{ ok: true; entry: LessonGlossaryEntryDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/glossary/${encodeURIComponent(entryId)}`,
+    { method: "PATCH", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ entry: LessonGlossaryEntryDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, entry: parsed.data.data.entry };
+}
+
+export async function archiveLessonGlossaryEntry(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  entryId: string
+): Promise<{ ok: true } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/glossary/${encodeURIComponent(entryId)}`,
+    { method: "DELETE", headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ archived: true }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true };
 }
 
 export async function fetchEnrollments(
