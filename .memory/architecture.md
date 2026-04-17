@@ -28,6 +28,10 @@ flowchart LR
 
 - Spike recorded as `.memory/decisions.md` **012**. Storage: `Lesson.contentKind`, `Lesson.videoAsset` (JSON), `Lesson.content` for reading HTML (sanitized). Planned `lesson_watch_state` for resume; completion via `Progress` (`LESSON`, `percent`). Watch DTO sketches: `lessonWatchStateDtoSchema` / `lessonWatchStatePatchBodySchema` in `packages/contracts/src/lms-api.ts`.
 
+## Lesson modalities (SCORM — spike)
+
+- Spike recorded as `.memory/decisions.md` **015**. **v1:** SCORM **1.2** in an **iframe** with LMS-implemented **`window.API`**, tenant-scoped **zip storage + server extract**, CMI state in a dedicated **attempt/state** table, completion mapped to existing **`Progress`** (`LESSON`). **Defer:** SCORM **2004** full runtime, popup launcher, third-party cloud runtime, multi-attempt grading, and score sync to `Assessment` unless product expands scope.
+
 ## Repo Profile
 
 - Package scope: `@conductor`
