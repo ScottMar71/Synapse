@@ -3,6 +3,7 @@
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { LessonContentKind } from "@conductor/contracts";
 import {
   fetchLessonReading,
   fetchStaffCourseLessonOutline,
@@ -22,7 +23,7 @@ type ReadingLessonEditorProps = {
 type OutlineOption = {
   lessonId: string;
   label: string;
-  contentKind: "READING" | "VIDEO";
+  contentKind: LessonContentKind;
   lessonTitle: string;
 };
 
