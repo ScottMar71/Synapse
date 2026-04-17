@@ -22,6 +22,7 @@ import { DocumentUploadBlock } from "./document-upload-block";
 import { ImageUploadBlock } from "./image-upload-block";
 import { LearningTimeAssistant } from "./learning-time-assistant";
 import { CourseEditorSummary } from "./course-editor-summary";
+import { LessonFilesEditor } from "./lesson-files-editor";
 import { LessonGlossaryEditor } from "./lesson-glossary-editor";
 import { LessonLinksEditor } from "./lesson-links-editor";
 import { MixedLessonBlocksEditor } from "./mixed-lesson-blocks-editor";
@@ -229,6 +230,7 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
             <ReadingLessonEditor session={session} courseId={courseId} />
             <MixedLessonBlocksEditor session={session} courseId={courseId} />
             <LessonLinksEditor session={session} courseId={courseId} />
+            <LessonFilesEditor session={session} courseId={courseId} />
             <LessonGlossaryEditor session={session} courseId={courseId} />
           </>
         ) : null}

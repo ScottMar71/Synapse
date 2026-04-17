@@ -13,6 +13,12 @@ import type {
   LessonExternalLinkCreateBody,
   LessonExternalLinkDto,
   LessonExternalLinkPatchBody,
+  LessonFileAttachmentDto,
+  LessonFileDownloadDto,
+  LessonFilePatchBody,
+  LessonFileReorderBody,
+  LessonFileUploadInitBody,
+  LessonFileUploadInstruction,
   LessonMixedBlockLearner,
   LessonMixedBlockPutItem,
   LessonPatchBody,
@@ -730,4 +736,125 @@ export async function deleteCourseFromCategory(
     return parsed;
   }
   return { ok: true };
+}
+
+function lessonFilesBase(session: LmsApiSession, courseId: string, lessonId: string): string {
+  return `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/files`;
+}
+
+export async function fetchLessonFileAttachments(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; attachments: LessonFileAttachmentDto[] } | { ok: false; error: ApiError }> {
+  const response = await fetch(lessonFilesBase(session, courseId, lessonId), {
+    headers: authHeaders(session)
+  });
+  const parsed = await parseResponse<DataEnvelope<{ attachments: LessonFileAttachmentDto[] }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, attachments: parsed.data.data.attachments };
+}
+
+export async function initLessonFileUpload(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  body: LessonFileUploadInitBody
+): Promise<
+  | {
+      ok: true;
+      attachment: LessonFileAttachmentDto;
+      upload: LessonFileUploadInstruction;
+      limits: { maxBytes: number };
+    }
+  | { ok: false; error: ApiError }
+> {
+  const response = await fetch(`${lessonFilesBase(session, courseId, lessonId)}/upload-init`, {
+    method: "POST",
+    headers: authHeaders(session, true),
+    body: JSON.stringify(body)
+  });
+  const parsed = await parseResponse<
+    DataEnvelope<{
+      attachment: LessonFileAttachmentDto;
+      upload: LessonFileUploadInstruction;
+      limits: { maxBytes: number };
+    }>
+  >(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, ...parsed.data.data };
+}
+
+export async function archiveLessonFileAttachment(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  fileId: string
+): Promise<{ ok: true } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `${lessonFilesBase(session, courseId, lessonId)}/${encodeURIComponent(fileId)}`,
+    { method: "DELETE", headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ archived: true }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true };
+}
+
+export async function patchLessonFileAttachment(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  fileId: string,
+  body: LessonFilePatchBody
+): Promise<{ ok: true; attachment: LessonFileAttachmentDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `${lessonFilesBase(session, courseId, lessonId)}/${encodeURIComponent(fileId)}`,
+    { method: "PATCH", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ attachment: LessonFileAttachmentDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, attachment: parsed.data.data.attachment };
+}
+
+export async function reorderLessonFileAttachments(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  body: LessonFileReorderBody
+): Promise<{ ok: true; attachments: LessonFileAttachmentDto[] } | { ok: false; error: ApiError }> {
+  const response = await fetch(lessonFilesBase(session, courseId, lessonId), {
+    method: "PATCH",
+    headers: authHeaders(session, true),
+    body: JSON.stringify(body)
+  });
+  const parsed = await parseResponse<DataEnvelope<{ attachments: LessonFileAttachmentDto[] }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, attachments: parsed.data.data.attachments };
+}
+
+export async function fetchLessonFileDownload(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  fileId: string
+): Promise<{ ok: true; download: LessonFileDownloadDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `${lessonFilesBase(session, courseId, lessonId)}/${encodeURIComponent(fileId)}/download`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ download: LessonFileDownloadDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, download: parsed.data.data.download };
 }
