@@ -8,6 +8,31 @@ export { z };
 
 const isoDateTime = z.string().datetime({ offset: true });
 
+function isAllowedLessonExternalLinkUrl(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return false;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return false;
+  }
+  const protocol = parsed.protocol.toLowerCase();
+  if (protocol !== "http:" && protocol !== "https:") {
+    return false;
+  }
+  return Boolean(parsed.hostname);
+}
+
+export const lessonExternalLinkUrlSchema = z
+  .string()
+  .min(1)
+  .max(2048)
+  .refine(isAllowedLessonExternalLinkUrl, { message: "Only http and https URLs with a valid host are allowed" })
+  .openapi("LessonExternalLinkUrl");
+
 export const lmsApiTags = {
   catalog: "Course catalog",
   categories: "Course categories",
@@ -324,6 +349,47 @@ export const lessonGlossaryPatchBodySchema = z
   )
   .openapi("LessonGlossaryPatchBody");
 
+export const lessonExternalLinkDtoSchema = z
+  .object({
+    id: z.string(),
+    tenantId: z.string(),
+    lessonId: z.string(),
+    title: z.string(),
+    url: z.string(),
+    description: z.string().nullable(),
+    sortOrder: z.number().int(),
+    archivedAt: isoDateTime.nullable(),
+    createdAt: isoDateTime,
+    updatedAt: isoDateTime
+  })
+  .openapi("LessonExternalLink");
+
+export const lessonExternalLinkCreateBodySchema = z
+  .object({
+    title: z.string().min(1).max(500),
+    url: lessonExternalLinkUrlSchema,
+    description: z.string().max(5000).nullable().optional(),
+    sortOrder: z.number().int().optional()
+  })
+  .openapi("LessonExternalLinkCreateBody");
+
+export const lessonExternalLinkPatchBodySchema = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    url: lessonExternalLinkUrlSchema.optional(),
+    description: z.string().max(5000).nullable().optional(),
+    sortOrder: z.number().int().optional()
+  })
+  .refine(
+    (body) =>
+      body.title !== undefined ||
+      body.url !== undefined ||
+      body.description !== undefined ||
+      body.sortOrder !== undefined,
+    { message: "At least one field is required" }
+  )
+  .openapi("LessonExternalLinkPatchBody");
+
 const lessonFileMaxBytes = 100 * 1024 * 1024;
 
 export const lessonFileAttachmentDtoSchema = z
@@ -481,6 +547,9 @@ export type StaffCourseLessonOutlineDto = z.infer<typeof staffCourseLessonOutlin
 export type LessonGlossaryEntryDto = z.infer<typeof lessonGlossaryEntryDtoSchema>;
 export type LessonGlossaryCreateBody = z.infer<typeof lessonGlossaryCreateBodySchema>;
 export type LessonGlossaryPatchBody = z.infer<typeof lessonGlossaryPatchBodySchema>;
+export type LessonExternalLinkDto = z.infer<typeof lessonExternalLinkDtoSchema>;
+export type LessonExternalLinkCreateBody = z.infer<typeof lessonExternalLinkCreateBodySchema>;
+export type LessonExternalLinkPatchBody = z.infer<typeof lessonExternalLinkPatchBodySchema>;
 export type LessonFileAttachmentDto = z.infer<typeof lessonFileAttachmentDtoSchema>;
 export type LessonFileUploadInitBody = z.infer<typeof lessonFileUploadInitBodySchema>;
 export type LessonFileUploadInstruction = z.infer<typeof lessonFileUploadInstructionSchema>;

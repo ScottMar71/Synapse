@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "./prisma";
+import { normalizeLessonLinkUrl } from "./lesson-link-url";
 import { READING_HTML_MAX_LENGTH, sanitizeReadingHtml } from "./reading-html";
 
 export type MembershipRoleName = "LEARNER" | "INSTRUCTOR" | "ADMIN";
@@ -2240,6 +2241,322 @@ export async function archiveLessonGlossaryEntryForStaff(input: {
 
   await prisma.lessonGlossaryEntry.update({
     where: { id: input.entryId },
+    data: { archivedAt: new Date() }
+  });
+
+  return { ok: true, archived: true };
+}
+
+export type LessonExternalLinkDto = {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  title: string;
+  url: string;
+  description: string | null;
+  sortOrder: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function mapLessonExternalLink(row: {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  title: string;
+  url: string;
+  description: string | null;
+  sortOrder: number;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): LessonExternalLinkDto {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    lessonId: row.lessonId,
+    title: row.title,
+    url: row.url,
+    description: row.description,
+    sortOrder: row.sortOrder,
+    archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+export async function listLessonExternalLinksForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; links: LessonExternalLinkDto[] } | { ok: false; error: ServiceError }> {
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true }
+  });
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const rows = await prisma.lessonExternalLink.findMany({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      title: true,
+      url: true,
+      description: true,
+      sortOrder: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, links: rows.map(mapLessonExternalLink) };
+}
+
+export async function createLessonExternalLink(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+  body: { title: string; url: string; description?: string | null; sortOrder?: number };
+}): Promise<{ ok: true; link: LessonExternalLinkDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const title = input.body.title.trim();
+  if (!title) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "Title cannot be empty" } };
+  }
+
+  const normalizedUrl = normalizeLessonLinkUrl(input.body.url);
+  if (!normalizedUrl.ok) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: normalizedUrl.message } };
+  }
+
+  let description: string | null;
+  if (input.body.description === undefined) {
+    description = null;
+  } else if (input.body.description === null) {
+    description = null;
+  } else {
+    const d = input.body.description.trim();
+    description = d.length ? d : null;
+  }
+
+  let sortOrder = input.body.sortOrder;
+  if (sortOrder === undefined) {
+    const agg = await prisma.lessonExternalLink.aggregate({
+      where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+      _max: { sortOrder: true }
+    });
+    sortOrder = (agg._max.sortOrder ?? -1) + 1;
+  }
+
+  const created = await prisma.lessonExternalLink.create({
+    data: {
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      title,
+      url: normalizedUrl.url,
+      description,
+      sortOrder
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      title: true,
+      url: true,
+      description: true,
+      sortOrder: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, link: mapLessonExternalLink(created) };
+}
+
+export async function patchLessonExternalLinkForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  linkId: string;
+  roles: MembershipRoleName[];
+  patch: { title?: string; url?: string; description?: string | null; sortOrder?: number };
+}): Promise<{ ok: true; link: LessonExternalLinkDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  if (
+    input.patch.title === undefined &&
+    input.patch.url === undefined &&
+    input.patch.description === undefined &&
+    input.patch.sortOrder === undefined
+  ) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "No fields to update" } };
+  }
+
+  const existing = await prisma.lessonExternalLink.findFirst({
+    where: {
+      id: input.linkId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      archivedAt: null
+    },
+    select: {
+      title: true,
+      url: true,
+      description: true,
+      sortOrder: true
+    }
+  });
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "External link not found" } };
+  }
+
+  let nextTitle = existing.title;
+  if (input.patch.title !== undefined) {
+    const t = input.patch.title.trim();
+    if (!t) {
+      return { ok: false, error: { code: "INVALID_INPUT", message: "Title cannot be empty" } };
+    }
+    nextTitle = t;
+  }
+
+  let nextUrl = existing.url;
+  if (input.patch.url !== undefined) {
+    const normalizedUrl = normalizeLessonLinkUrl(input.patch.url);
+    if (!normalizedUrl.ok) {
+      return { ok: false, error: { code: "INVALID_INPUT", message: normalizedUrl.message } };
+    }
+    nextUrl = normalizedUrl.url;
+  }
+
+  let nextDescription = existing.description;
+  if (input.patch.description !== undefined) {
+    if (input.patch.description === null) {
+      nextDescription = null;
+    } else {
+      const d = input.patch.description.trim();
+      nextDescription = d.length ? d : null;
+    }
+  }
+
+  const nextSortOrder = input.patch.sortOrder ?? existing.sortOrder;
+
+  const updated = await prisma.lessonExternalLink.update({
+    where: { id: input.linkId },
+    data: {
+      title: nextTitle,
+      url: nextUrl,
+      description: nextDescription,
+      sortOrder: nextSortOrder
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      title: true,
+      url: true,
+      description: true,
+      sortOrder: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, link: mapLessonExternalLink(updated) };
+}
+
+export async function archiveLessonExternalLinkForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  linkId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; archived: true } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const existing = await prisma.lessonExternalLink.findFirst({
+    where: {
+      id: input.linkId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      archivedAt: null
+    },
+    select: { id: true }
+  });
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "External link not found" } };
+  }
+
+  await prisma.lessonExternalLink.update({
+    where: { id: input.linkId },
     data: { archivedAt: new Date() }
   });
 

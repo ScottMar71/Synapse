@@ -128,3 +128,10 @@
 | SCORM 2004 `cmi.completion_status` / `cmi.success_status` | **Defer** to 2004 slice; conceptually same completion mapping as 1.2 `lesson_status` once RTE is 1484. |
 
 - Status: **Proposed** (close spike after tech-lead review; then set **Active** like decision 012)
+
+### 016 - Lesson external links: cascade, archive, URL policy
+
+- Date: 2026-04-17
+- Context: Supplementary resources need curated URLs on lessons with the same tenancy and access patterns as glossary entries and files.
+- Decision: Persist in **`lesson_external_links`** with **`tenantId`** + **`lessonId`** FKs (**ON DELETE CASCADE**). **Soft delete** via **`archivedAt`**; list queries exclude archived rows. **URL policy:** only **http** and **https** with a non-empty host; normalize on write via **`normalizeLessonLinkUrl`** in `packages/database/src/lesson-link-url.ts` (mirrored in **`@conductor/contracts`** Zod for OpenAPI). **API:** `GET|POST .../lessons/{lessonId}/links`, `PATCH|DELETE .../links/{linkId}`; **learners** need enrollment; **staff** for mutations; audit **`lesson.external_link_*`**.
+- Status: Active
