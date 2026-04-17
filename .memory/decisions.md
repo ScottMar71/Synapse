@@ -135,3 +135,10 @@
 - Context: Supplementary resources need curated URLs on lessons with the same tenancy and access patterns as glossary entries and files.
 - Decision: Persist in **`lesson_external_links`** with **`tenantId`** + **`lessonId`** FKs (**ON DELETE CASCADE**). **Soft delete** via **`archivedAt`**; list queries exclude archived rows. **URL policy:** only **http** and **https** with a non-empty host; normalize on write via **`normalizeLessonLinkUrl`** in `packages/database/src/lesson-link-url.ts` (mirrored in **`@conductor/contracts`** Zod for OpenAPI). **API:** `GET|POST .../lessons/{lessonId}/links`, `PATCH|DELETE .../links/{linkId}`; **learners** need enrollment; **staff** for mutations; audit **`lesson.external_link_*`**.
 - Status: Active
+
+### 017 - Mixed lessons: `lesson_blocks` table and segment APIs
+
+- Date: 2026-04-17
+- Context: Mixed modality lessons need an ordered list of reading and video segments without a full LCMS block editor.
+- Decision: Add **`LessonContentKind.MIXED`** and normalized **`lesson_blocks`** (`tenantId`, `lessonId`, `sortOrder`, `blockType` READING|VIDEO, `payload` JSON: reading `{ html }`, video same shape as **`lessonVideoAsset`**). **Existing** READING/VIDEO rows stay on **`lessons.content`** / **`lessons.videoAsset`** with **no** automatic migration into blocks. **Staff:** `PATCH .../lessons/{lessonId}` may set **`contentKind`** (leaving MIXED clears **`videoAsset`**); **`PUT .../lessons/{lessonId}/blocks`** replaces the block list (only when **`contentKind === MIXED`**). **Learners/staff preview:** **`GET .../blocks`** (enrollment rules align with reading). **Playback assembly** is available via **`getLessonPlaybackForViewer`** (blocks for MIXED). **Video watch-state** (`lesson_watch_states`) remains **lesson-scoped** and **`patchLessonWatchStateForViewer` still requires `contentKind === VIDEO`** — per-segment resume for MIXED is **deferred**.
+- Status: Active

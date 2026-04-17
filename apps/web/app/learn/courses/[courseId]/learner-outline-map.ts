@@ -28,7 +28,12 @@ export function mapOutlineForLearner(
     lessons: mod.lessons.map((l) => ({
       id: l.id,
       title: l.title,
-      lessonType: l.contentKind === "VIDEO" ? ("video" as const) : ("reading" as const),
+      lessonType:
+        l.contentKind === "VIDEO"
+          ? ("video" as const)
+          : l.contentKind === "MIXED"
+            ? ("mixed" as const)
+            : ("reading" as const),
       href: lessonPath(courseId, l.id),
       current: l.id === currentLessonId,
       completed: completed.has(l.id)

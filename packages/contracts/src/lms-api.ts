@@ -186,7 +186,9 @@ export const lessonVideoHttpUrlSchema = z
   .min(1)
   .refine(isSafeHttpUrl, { message: "URL must use http or https" });
 
-export const lessonContentKindSchema = z.enum(["READING", "VIDEO"]).openapi("LessonContentKind");
+export const lessonContentKindSchema = z.enum(["READING", "VIDEO", "MIXED"]).openapi("LessonContentKind");
+
+export const lessonMixedBlockTypeSchema = z.enum(["READING", "VIDEO"]).openapi("LessonMixedBlockType");
 
 export const lessonVideoCaptionTrackSchema = z
   .object({
@@ -213,6 +215,62 @@ export const lessonVideoPlaybackSchema = z
   })
   .openapi("LessonVideoPlayback");
 
+/** Staff replace-body for one segment of a `MIXED` lesson (`lesson_blocks` rows, ordered). */
+export const lessonMixedBlockPutReadingSchema = z
+  .object({
+    blockType: z.literal("READING"),
+    reading: z.object({
+      html: z.string().max(500_000)
+    })
+  })
+  .openapi("LessonMixedBlockPutReading");
+
+export const lessonMixedBlockPutVideoSchema = z
+  .object({
+    blockType: z.literal("VIDEO"),
+    video: lessonVideoAssetSchema
+  })
+  .openapi("LessonMixedBlockPutVideo");
+
+export const lessonMixedBlockPutItemSchema = z
+  .discriminatedUnion("blockType", [lessonMixedBlockPutReadingSchema, lessonMixedBlockPutVideoSchema])
+  .openapi("LessonMixedBlockPutItem");
+
+export const lessonMixedBlocksPutBodySchema = z
+  .object({
+    blocks: z.array(lessonMixedBlockPutItemSchema).max(64)
+  })
+  .openapi("LessonMixedBlocksPutBody");
+
+/** Learner/staff-assembled segment for display (reading HTML sanitized server-side). */
+export const lessonMixedBlockLearnerReadingSchema = z
+  .object({
+    id: z.string(),
+    sortOrder: z.number().int(),
+    blockType: z.literal("READING"),
+    html: z.string().nullable()
+  })
+  .openapi("LessonMixedBlockLearnerReading");
+
+export const lessonMixedBlockLearnerVideoSchema = z
+  .object({
+    id: z.string(),
+    sortOrder: z.number().int(),
+    blockType: z.literal("VIDEO"),
+    video: lessonVideoPlaybackSchema
+  })
+  .openapi("LessonMixedBlockLearnerVideo");
+
+export const lessonMixedBlockLearnerSchema = z
+  .discriminatedUnion("blockType", [lessonMixedBlockLearnerReadingSchema, lessonMixedBlockLearnerVideoSchema])
+  .openapi("LessonMixedBlockLearner");
+
+export const lessonMixedBlocksDataSchema = z
+  .object({
+    blocks: z.array(lessonMixedBlockLearnerSchema)
+  })
+  .openapi("LessonMixedBlocksData");
+
 export const lessonPlaybackDtoSchema = z
   .object({
     lesson: z.object({
@@ -221,7 +279,8 @@ export const lessonPlaybackDtoSchema = z
       contentKind: lessonContentKindSchema,
       readingContent: z.string().nullable()
     }),
-    video: lessonVideoPlaybackSchema.nullable()
+    video: lessonVideoPlaybackSchema.nullable(),
+    blocks: z.array(lessonMixedBlockLearnerSchema).optional()
   })
   .openapi("LessonPlayback");
 
@@ -552,6 +611,8 @@ export type LessonVideoCaptionTrackDto = z.infer<typeof lessonVideoCaptionTrackS
 export type LessonVideoAssetDto = z.infer<typeof lessonVideoAssetSchema>;
 export type LessonVideoPlaybackDto = z.infer<typeof lessonVideoPlaybackSchema>;
 export type LessonPlaybackDto = z.infer<typeof lessonPlaybackDtoSchema>;
+export type LessonMixedBlockPutItem = z.infer<typeof lessonMixedBlockPutItemSchema>;
+export type LessonMixedBlockLearner = z.infer<typeof lessonMixedBlockLearnerSchema>;
 export type LessonWatchStateDto = z.infer<typeof lessonWatchStateDtoSchema>;
 export type LessonWatchStatePatchBody = z.infer<typeof lessonWatchStatePatchBodySchema>;
 export type LessonWatchCompletionResult = z.infer<typeof lessonWatchCompletionResultSchema>;
