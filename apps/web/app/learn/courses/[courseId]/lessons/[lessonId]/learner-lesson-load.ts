@@ -4,6 +4,7 @@ import {
   fetchCourse,
   fetchCourseLessonOutline,
   fetchLessonExternalLinks,
+  fetchLessonFileAttachments,
   fetchLessonGlossaryEntries,
   fetchLessonMixedBlocks,
   fetchLessonPlayback,
@@ -14,7 +15,13 @@ import {
 import type { LmsSession } from "../../../../../../lib/lms-session";
 import { findOutlineLesson, mapOutlineForLearner } from "../../learner-outline-map";
 
-import type { LoadState, ReadyMixed, ReadyReading, ReadyVideo } from "./learner-lesson-types";
+import {
+  sortLessonFiles,
+  type LoadState,
+  type ReadyMixed,
+  type ReadyReading,
+  type ReadyVideo
+} from "./learner-lesson-types";
 
 export type LessonLoadFailure = { ok: false; message: string; clearOutline: boolean };
 
@@ -32,11 +39,12 @@ export async function loadLearnerLessonPageState(
   courseId: string,
   lessonId: string
 ): Promise<LessonLoadResult> {
-  const [courseRes, outlineRes, progressRes, linksRes, glossaryRes] = await Promise.all([
+  const [courseRes, outlineRes, progressRes, linksRes, filesRes, glossaryRes] = await Promise.all([
     fetchCourse(session, courseId),
     fetchCourseLessonOutline(session, courseId),
     fetchProgress(session, session.userId),
     fetchLessonExternalLinks(session, courseId, lessonId),
+    fetchLessonFileAttachments(session, courseId, lessonId),
     fetchLessonGlossaryEntries(session, courseId, lessonId)
   ]);
 
@@ -52,7 +60,11 @@ export async function loadLearnerLessonPageState(
   if (!linksRes.ok) {
     return { ok: false, message: linksRes.error.message, clearOutline: false };
   }
+  if (!filesRes.ok) {
+    return { ok: false, message: filesRes.error.message, clearOutline: false };
+  }
 
+  const lessonFiles = sortLessonFiles(filesRes.attachments);
   const lessonGlossary = glossaryRes.ok ? glossaryRes.entries : [];
 
   const outlineLesson = findOutlineLesson(outlineRes.outline, lessonId);
@@ -107,6 +119,7 @@ export async function loadLearnerLessonPageState(
       video: playbackRes.playback.video,
       initialWatchState,
       resumeLoadWarning,
+      lessonFiles,
       lessonLinks: linksRes.links,
       lessonGlossary,
       lessonOutlineModules,
@@ -126,6 +139,7 @@ export async function loadLearnerLessonPageState(
       courseTitle: courseRes.course.title,
       lessonTitle: outlineLesson.title,
       blocks: blocksRes.blocks,
+      lessonFiles,
       lessonLinks: linksRes.links,
       lessonGlossary,
       lessonOutlineModules,
@@ -154,6 +168,7 @@ export async function loadLearnerLessonPageState(
     courseTitle: courseRes.course.title,
     lessonTitle: reading.title,
     html: reading.html,
+    lessonFiles,
     lessonLinks: linksRes.links,
     lessonGlossary,
     lessonOutlineModules,

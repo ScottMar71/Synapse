@@ -1,5 +1,6 @@
 import type {
   LessonExternalLinkDto,
+  LessonFileAttachmentDto,
   LessonGlossaryEntryDto,
   LessonMixedBlockLearner,
   LessonVideoPlaybackDto,
@@ -15,6 +16,7 @@ export type ReadyReading = {
   courseTitle: string;
   lessonTitle: string;
   html: string | null;
+  lessonFiles: LessonFileAttachmentDto[];
   lessonLinks: LessonExternalLinkDto[];
   lessonGlossary: LessonGlossaryEntryDto[];
   lessonOutlineModules: LessonOutlineModule[];
@@ -27,6 +29,7 @@ export type ReadyMixed = {
   courseTitle: string;
   lessonTitle: string;
   blocks: LessonMixedBlockLearner[];
+  lessonFiles: LessonFileAttachmentDto[];
   lessonLinks: LessonExternalLinkDto[];
   lessonGlossary: LessonGlossaryEntryDto[];
   lessonOutlineModules: LessonOutlineModule[];
@@ -41,6 +44,7 @@ export type ReadyVideo = {
   video: LessonVideoPlaybackDto;
   initialWatchState: LessonWatchStateDto | null;
   resumeLoadWarning: string | null;
+  lessonFiles: LessonFileAttachmentDto[];
   lessonLinks: LessonExternalLinkDto[];
   lessonGlossary: LessonGlossaryEntryDto[];
   lessonOutlineModules: LessonOutlineModule[];
@@ -53,6 +57,15 @@ export type LoadState =
   | ReadyReading
   | ReadyMixed
   | ReadyVideo;
+
+export function sortLessonFiles(files: LessonFileAttachmentDto[]): LessonFileAttachmentDto[] {
+  return [...files].sort((a, b) => {
+    if (a.sortOrder !== b.sortOrder) {
+      return a.sortOrder - b.sortOrder;
+    }
+    return a.id.localeCompare(b.id);
+  });
+}
 
 export function sortLessonLinks(links: LessonExternalLinkDto[]): LessonExternalLinkDto[] {
   return [...links].sort((a, b) => {

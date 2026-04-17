@@ -62,9 +62,18 @@ export default function LearnerLessonPage(): ReactElement {
   }
 
   const lessonComplete = lessonPercent >= 100;
-  const resourcesPanel = (
-    <LessonResourcesPanel lessonLinks={state.lessonLinks} lessonGlossary={state.lessonGlossary} />
-  );
+  const resourcesSession = getSession();
+  const resourcesPanel =
+    resourcesSession ? (
+      <LessonResourcesPanel
+        session={resourcesSession}
+        courseId={courseId}
+        lessonId={lessonId}
+        lessonFiles={state.lessonFiles}
+        lessonLinks={state.lessonLinks}
+        lessonGlossary={state.lessonGlossary}
+      />
+    ) : null;
 
   const mainAriaLabel =
     state.variant === "mixed"
