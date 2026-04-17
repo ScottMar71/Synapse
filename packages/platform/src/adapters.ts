@@ -2,8 +2,28 @@ export type AuthAdapter = {
   validateToken: (token: string) => Promise<{ userId: string; tenantId: string } | null>;
 };
 
+export type PresignedPutObjectResult = {
+  url: string;
+  headers: Record<string, string>;
+};
+
+export type PresignedGetObjectResult = {
+  url: string;
+  expiresInSeconds: number;
+};
+
 export type StorageAdapter = {
   putObject: (input: { key: string; body: string }) => Promise<void>;
+  createPresignedPutObjectUrl: (input: {
+    key: string;
+    contentType: string;
+    contentLength: number;
+  }) => Promise<PresignedPutObjectResult>;
+  createPresignedGetObjectUrl: (input: {
+    key: string;
+    fileName: string;
+    contentType: string;
+  }) => Promise<PresignedGetObjectResult>;
 };
 
 export type EmailAdapter = {
@@ -37,6 +57,12 @@ export function createNoopPlatformAdapters(): PlatformAdapters {
     storage: {
       async putObject() {
         return;
+      },
+      async createPresignedPutObjectUrl() {
+        return { url: "https://example.invalid/presigned-put", headers: {} };
+      },
+      async createPresignedGetObjectUrl() {
+        return { url: "https://example.invalid/presigned-get", expiresInSeconds: 60 };
       }
     },
     email: {

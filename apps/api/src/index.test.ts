@@ -1166,6 +1166,167 @@ describe("lesson glossary endpoints", () => {
   });
 });
 
+describe("lesson file endpoints", () => {
+  const filesBase = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/files`;
+
+  const sampleAttachment = {
+    id: "file-1",
+    tenantId: tenantA,
+    lessonId: "lesson-1",
+    fileName: "notes.pdf",
+    mimeType: "application/pdf",
+    sizeBytes: 1024,
+    sortOrder: 0,
+    description: null as string | null,
+    createdAt: "2026-04-17T00:00:00.000Z",
+    updatedAt: "2026-04-17T00:00:00.000Z"
+  };
+
+  it("returns file list when data access succeeds for a learner", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listLessonFileAttachmentsForViewer() {
+          return { ok: true, attachments: [sampleAttachment] };
+        }
+      }
+    });
+
+    const response = await app.request(filesBase, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { attachments: { fileName: string }[] } };
+    expect(body.data.attachments).toHaveLength(1);
+    expect(body.data.attachments[0]?.fileName).toBe("notes.pdf");
+  });
+
+  it("denies upload-init POST for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async initLessonFileUploadForStaff() {
+          throw new Error("initLessonFileUploadForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(`${filesBase}/upload-init`, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({
+        fileName: "x.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 100
+      })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff upload-init when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async initLessonFileUploadForStaff() {
+          return {
+            ok: true,
+            attachment: sampleAttachment,
+            storageKey: `tenants/${tenantA}/lesson-files/${sampleAttachment.id}`
+          };
+        }
+      }
+    });
+
+    const response = await app.request(`${filesBase}/upload-init`, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({
+        fileName: "notes.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 1024
+      })
+    });
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      data: { attachment: { id: string }; upload: { method: string; url: string } };
+    };
+    expect(body.data.attachment.id).toBe("file-1");
+    expect(body.data.upload.method).toBe("PUT");
+    expect(body.data.upload.url).toContain("example.invalid");
+  });
+
+  it("returns download envelope when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async getLessonFileDownloadForViewer() {
+          return {
+            ok: true,
+            attachment: sampleAttachment,
+            storageKey: `tenants/${tenantA}/lesson-files/${sampleAttachment.id}`
+          };
+        }
+      }
+    });
+
+    const response = await app.request(`${filesBase}/file-1/download`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { download: { url: string; fileName: string } };
+    };
+    expect(body.data.download.fileName).toBe("notes.pdf");
+    expect(body.data.download.url).toContain("example.invalid");
+  });
+
+  it("does not call list files data access for cross-tenant requests", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listLessonFileAttachmentsForViewer() {
+          throw new Error("listLessonFileAttachmentsForViewer should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/files`,
+      { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(403);
+  });
+});
+
 describe("observability", () => {
   it("echoes x-request-id and exposes internal metrics", async () => {
     const app = buildApp({

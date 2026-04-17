@@ -32,6 +32,7 @@
   - `GET /api/v1/tenants/:tenantId/learners` — users with an active `LEARNER` membership
   - `packages/database` exposes `listCoursesForTenant` and `listLearnersForTenant`; `buildApp` accepts injectable `dataAccess` for tests
 - **Lesson video (spike)**: Conductor deliverable `67e25387-a839-4c36-a680-d407779cc585` — recommendation **decision 012**; watch-state Zod sketches in `packages/contracts/src/lms-api.ts`. `lesson_watch_state` migration + learner watch API + player wiring are follow-on work.
+- **Lesson file attachments (API)**: `lesson_file_attachments` model; `GET|POST .../lessons/{lessonId}/files`, `GET .../files/{fileId}/download`; S3-compatible presigning when `LMS_OBJECT_STORAGE_*` set (**decision 014**, `infra/deployment/lesson-object-storage.md`).
 
 ## In Progress
 

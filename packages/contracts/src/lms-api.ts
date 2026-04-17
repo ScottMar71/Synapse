@@ -324,6 +324,50 @@ export const lessonGlossaryPatchBodySchema = z
   )
   .openapi("LessonGlossaryPatchBody");
 
+const lessonFileMaxBytes = 100 * 1024 * 1024;
+
+export const lessonFileAttachmentDtoSchema = z
+  .object({
+    id: z.string(),
+    tenantId: z.string(),
+    lessonId: z.string(),
+    fileName: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number().int(),
+    sortOrder: z.number().int(),
+    description: z.string().nullable(),
+    createdAt: isoDateTime,
+    updatedAt: isoDateTime
+  })
+  .openapi("LessonFileAttachment");
+
+export const lessonFileUploadInitBodySchema = z
+  .object({
+    fileName: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(200),
+    sizeBytes: z.number().int().positive().max(lessonFileMaxBytes),
+    sortOrder: z.number().int().optional(),
+    description: z.string().max(2000).nullable().optional()
+  })
+  .openapi("LessonFileUploadInitBody");
+
+export const lessonFileUploadInstructionSchema = z
+  .object({
+    method: z.literal("PUT"),
+    url: z.string().url(),
+    headers: z.record(z.string(), z.string())
+  })
+  .openapi("LessonFileUploadInstruction");
+
+export const lessonFileDownloadDtoSchema = z
+  .object({
+    url: z.string().url(),
+    expiresInSeconds: z.number().int(),
+    fileName: z.string(),
+    mimeType: z.string()
+  })
+  .openapi("LessonFileDownload");
+
 export const learnerSummarySchema = z
   .object({
     id: z.string(),
@@ -418,5 +462,9 @@ export type StaffCourseLessonOutlineDto = z.infer<typeof staffCourseLessonOutlin
 export type LessonGlossaryEntryDto = z.infer<typeof lessonGlossaryEntryDtoSchema>;
 export type LessonGlossaryCreateBody = z.infer<typeof lessonGlossaryCreateBodySchema>;
 export type LessonGlossaryPatchBody = z.infer<typeof lessonGlossaryPatchBodySchema>;
+export type LessonFileAttachmentDto = z.infer<typeof lessonFileAttachmentDtoSchema>;
+export type LessonFileUploadInitBody = z.infer<typeof lessonFileUploadInitBodySchema>;
+export type LessonFileUploadInstruction = z.infer<typeof lessonFileUploadInstructionSchema>;
+export type LessonFileDownloadDto = z.infer<typeof lessonFileDownloadDtoSchema>;
 export type LearnerSummaryDto = z.infer<typeof learnerSummarySchema>;
 export type LearnerProvisionBody = z.infer<typeof learnerProvisionBodySchema>;
