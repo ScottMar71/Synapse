@@ -181,6 +181,19 @@ export function isSafeHttpUrl(raw: string): boolean {
   }
 }
 
+/**
+ * Video lesson storage and playback contracts align with `@conductor/ui` **`VideoPlayer`**:
+ *
+ * - **DB:** `lessons.videoAsset` stores JSON matching **`lessonVideoAssetSchema`** (`sourceUrl`, optional `posterUrl`, `captions`).
+ * - **Learner assembly:** `GET .../lessons/{lessonId}/playback` returns **`lessonPlaybackDtoSchema`**; for `contentKind: VIDEO`,
+ *   `video` is **`lessonVideoPlaybackSchema`** (`src`/`poster`/`captions`) assembled server-side from `videoAsset`.
+ * - **UI mapping:** `LessonVideoPlaybackDto.src` → `VideoPlayer` `src`; `poster` → `poster`; `captions` → `captions` (see `VideoCaptionTrack`).
+ * - **Resume / completion:** `GET|PATCH .../watch-state` uses **`lessonWatchStateDtoSchema`** / **`lessonWatchStatePatchBodySchema`**;
+ *   completion evaluation **`lessonWatchCompletionResultSchema`** (default watched threshold **0.8**, same as `VideoPlayer` default).
+ *
+ * **MIXED** lessons return ordered **`blocks`** on playback; each video segment uses **`lessonMixedBlockLearnerVideoSchema`**.
+ * Watch-state routes remain limited to top-level **VIDEO** lessons (decision **017** in `.memory/decisions.md`).
+ */
 export const lessonVideoHttpUrlSchema = z
   .string()
   .min(1)
@@ -209,8 +222,8 @@ export const lessonVideoAssetSchema = z
 
 export const lessonVideoPlaybackSchema = z
   .object({
-    src: z.string(),
-    poster: z.string().nullable(),
+    src: lessonVideoHttpUrlSchema,
+    poster: lessonVideoHttpUrlSchema.nullable(),
     captions: z.array(lessonVideoCaptionTrackSchema)
   })
   .openapi("LessonVideoPlayback");
