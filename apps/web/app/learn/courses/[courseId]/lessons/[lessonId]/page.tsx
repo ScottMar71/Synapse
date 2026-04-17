@@ -14,6 +14,7 @@ import type { ReactElement } from "react";
 import { useMemo } from "react";
 
 import { getSession } from "../../../../../../lib/lms-session";
+import { LearnerScormPanel } from "./learner-scorm-panel";
 import { LearnerVideoPanel } from "./learner-video-panel";
 import { NextLessonLink, NextOutlineLink } from "./learner-lesson-nav-links";
 import { LessonResourcesPanel } from "./lesson-resources-panel";
@@ -80,7 +81,9 @@ export default function LearnerLessonPage(): ReactElement {
       ? "Mixed lesson segments"
       : state.variant === "video"
         ? "Lesson video"
-        : "Lesson reading";
+        : state.variant === "scorm"
+          ? "SCORM lesson"
+          : "Lesson reading";
 
   const completionStatus = (() => {
     if (lessonComplete) {
@@ -111,6 +114,14 @@ export default function LearnerLessonPage(): ReactElement {
           Scroll through all segments. When the lesson includes video, each clip must reach the
           watch threshold before completion is recorded automatically. You can also mark the lesson
           complete manually.
+        </p>
+      );
+    }
+    if (state.variant === "scorm") {
+      return (
+        <p className={styles.status}>
+          When the package sets SCORM completion (passed or completed), this lesson is marked
+          complete automatically. You can also use the button below if you need to finish manually.
         </p>
       );
     }
@@ -194,6 +205,37 @@ export default function LearnerLessonPage(): ReactElement {
             <p role="alert">Session missing. Sign in again.</p>
           );
         })()
+      ) : state.variant === "scorm" ? (
+        (() => {
+          if (state.scormUnavailableMessage) {
+            return (
+              <div role="alert" className={styles.playbackUnavailable}>
+                <p className={styles.playbackUnavailableText}>{state.scormUnavailableMessage}</p>
+              </div>
+            );
+          }
+          const session = getSession();
+          if (!session || !state.pkg || !state.initialSession) {
+            return (
+              <p role="alert" style={{ margin: 0 }}>
+                SCORM playback is not available. Sign in again or return to the course outline.
+              </p>
+            );
+          }
+          return (
+            <LearnerScormPanel
+              key={`${lessonId}-${state.pkg.updatedAt}`}
+              session={session}
+              courseId={courseId}
+              lessonId={lessonId}
+              pkg={state.pkg}
+              initialSession={state.initialSession}
+              onSessionPersisted={async () => {
+                await refreshOutlineProgress();
+              }}
+            />
+          );
+        })()
       ) : state.blocks.length === 0 ? (
         <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
           This mixed lesson does not have any segments yet.
@@ -224,6 +266,11 @@ export default function LearnerLessonPage(): ReactElement {
       {state.variant === "video" && state.video && state.resumeLoadWarning ? (
         <p className={styles.status} role="status">
           {state.resumeLoadWarning}
+        </p>
+      ) : null}
+      {state.variant === "scorm" && state.sessionLoadWarning ? (
+        <p className={styles.status} role="status">
+          {state.sessionLoadWarning}
         </p>
       ) : null}
       {completeMessage ? (

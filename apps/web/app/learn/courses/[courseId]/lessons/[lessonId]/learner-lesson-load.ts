@@ -1,4 +1,5 @@
 import type {
+  LessonScormSessionDto,
   LessonVideoPlaybackDto,
   LessonWatchStateDto,
   ProgressDto,
@@ -14,6 +15,8 @@ import {
   fetchLessonMixedBlocks,
   fetchLessonPlayback,
   fetchLessonReading,
+  fetchLessonScormPackage,
+  fetchLessonScormSession,
   fetchLessonWatchState,
   fetchProgress
 } from "../../../../../../lib/lms-api-client";
@@ -25,6 +28,7 @@ import {
   type LoadState,
   type ReadyMixed,
   type ReadyReading,
+  type ReadyScorm,
   type ReadyVideo
 } from "./learner-lesson-types";
 
@@ -152,6 +156,59 @@ export async function loadLearnerLessonPageState(
       courseTitle: courseRes.course.title,
       lessonTitle: outlineLesson.title,
       blocks: blocksRes.blocks,
+      lessonFiles,
+      lessonLinks: linksRes.links,
+      lessonGlossary,
+      lessonOutlineModules,
+      navigationModules
+    };
+    return { ok: true, lessonPercent, outline: outlineRes.outline, state: ready };
+  }
+
+  if (outlineLesson.contentKind === "SCORM") {
+    const pkgRes = await fetchLessonScormPackage(session, courseId, lessonId);
+    if (!pkgRes.ok) {
+      return { ok: false, message: pkgRes.error.message, clearOutline: false };
+    }
+    let initialSession: LessonScormSessionDto | null = null;
+    let sessionLoadWarning: string | null = null;
+    let scormUnavailableMessage: string | null = null;
+    const p = pkgRes.pkg;
+
+    if (!p) {
+      scormUnavailableMessage = "No SCORM package has been uploaded for this lesson yet.";
+    } else if (p.status === "FAILED") {
+      scormUnavailableMessage = p.processingError ?? "SCORM package processing failed.";
+    } else if (p.status !== "READY") {
+      scormUnavailableMessage =
+        p.status === "PROCESSING"
+          ? "SCORM package is still processing. Try again shortly."
+          : "SCORM package is not ready to launch yet.";
+    } else {
+      const sessRes = await fetchLessonScormSession(session, courseId, lessonId);
+      if (!sessRes.ok) {
+        sessionLoadWarning = `Saved SCORM progress could not be loaded (${sessRes.error.message}).`;
+        initialSession = {
+          tenantId: session.tenantId,
+          userId: session.userId,
+          lessonId,
+          cmiState: {},
+          updatedAt: new Date(0).toISOString()
+        };
+      } else {
+        initialSession = sessRes.session;
+      }
+    }
+
+    const ready: ReadyScorm = {
+      status: "ready",
+      variant: "scorm",
+      courseTitle: courseRes.course.title,
+      lessonTitle: outlineLesson.title,
+      pkg: p,
+      initialSession,
+      scormUnavailableMessage,
+      sessionLoadWarning,
       lessonFiles,
       lessonLinks: linksRes.links,
       lessonGlossary,

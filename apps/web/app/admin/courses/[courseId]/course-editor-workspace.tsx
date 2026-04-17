@@ -224,10 +224,10 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
           )}
         </div>
 
-        <ScormUploadBlock />
         <CourseEditorSummary value={courseSummary} onChange={setCourseSummary} />
         {session ? (
           <>
+            <ScormUploadBlock session={session} courseId={courseId} />
             <ReadingLessonEditor session={session} courseId={courseId} />
             <VideoLessonEditor session={session} courseId={courseId} />
             <MixedLessonBlocksEditor session={session} courseId={courseId} />

@@ -130,6 +130,9 @@ export function useLearnerLessonPage(courseId: string, lessonId: string): {
     if (state.variant === "video") {
       return;
     }
+    if (state.variant === "scorm") {
+      return;
+    }
     if (lessonPercent >= 100) {
       return;
     }

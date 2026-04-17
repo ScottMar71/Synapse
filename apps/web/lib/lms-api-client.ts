@@ -25,6 +25,10 @@ import type {
   LessonPlaybackDto,
   LessonReadingDto,
   LessonReadingPatchBody,
+  LessonScormPackageDto,
+  LessonScormSessionDto,
+  LessonScormSessionPatchBody,
+  LessonScormUploadInitBody,
   LessonStaffDto,
   LessonWatchCompletionResult,
   LessonWatchStateDto,
@@ -873,4 +877,104 @@ export async function fetchLessonFileDownload(
     return parsed;
   }
   return { ok: true, download: parsed.data.data.download };
+}
+
+function lessonScormBase(session: LmsApiSession, courseId: string, lessonId: string): string {
+  return `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/scorm`;
+}
+
+export async function initLessonScormPackageUpload(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  body: LessonScormUploadInitBody
+): Promise<
+  | {
+      ok: true;
+      pkg: LessonScormPackageDto;
+      upload: { method: "PUT"; url: string; headers: Record<string, string> };
+      limits: { maxBytes: number };
+    }
+  | { ok: false; error: ApiError }
+> {
+  const response = await fetch(`${lessonScormBase(session, courseId, lessonId)}/package/upload-init`, {
+    method: "POST",
+    headers: authHeaders(session, true),
+    body: JSON.stringify(body)
+  });
+  const parsed = await parseResponse<
+    DataEnvelope<{
+      pkg: LessonScormPackageDto;
+      upload: { method: "PUT"; url: string; headers: Record<string, string> };
+      limits: { maxBytes: number };
+    }>
+  >(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, ...parsed.data.data };
+}
+
+export async function postLessonScormPackageProcess(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; pkg: LessonScormPackageDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(`${lessonScormBase(session, courseId, lessonId)}/package/process`, {
+    method: "POST",
+    headers: authHeaders(session)
+  });
+  const parsed = await parseResponse<DataEnvelope<{ pkg: LessonScormPackageDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, pkg: parsed.data.data.pkg };
+}
+
+export async function fetchLessonScormPackage(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; pkg: LessonScormPackageDto | null } | { ok: false; error: ApiError }> {
+  const response = await fetch(`${lessonScormBase(session, courseId, lessonId)}/package`, {
+    headers: authHeaders(session)
+  });
+  const parsed = await parseResponse<DataEnvelope<{ pkg: LessonScormPackageDto | null }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, pkg: parsed.data.data.pkg };
+}
+
+export async function fetchLessonScormSession(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; session: LessonScormSessionDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(`${lessonScormBase(session, courseId, lessonId)}/session`, {
+    headers: authHeaders(session)
+  });
+  const parsed = await parseResponse<DataEnvelope<{ session: LessonScormSessionDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, session: parsed.data.data.session };
+}
+
+export async function patchLessonScormSession(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  body: LessonScormSessionPatchBody
+): Promise<{ ok: true; session: LessonScormSessionDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(`${lessonScormBase(session, courseId, lessonId)}/session`, {
+    method: "PATCH",
+    headers: authHeaders(session, true),
+    body: JSON.stringify(body)
+  });
+  const parsed = await parseResponse<DataEnvelope<{ session: LessonScormSessionDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, session: parsed.data.data.session };
 }

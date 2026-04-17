@@ -542,7 +542,8 @@ export const lessonFilePatchBodySchema = z
   )
   .openapi("LessonFilePatchBody");
 
-const lessonScormZipMaxBytes = 120 * 1024 * 1024;
+/** Upper bound for staff SCORM zip upload (matches API domain guard). */
+export const LESSON_SCORM_ZIP_MAX_BYTES = 120 * 1024 * 1024;
 
 export const lessonScormPackageStatusSchema = z
   .enum(["PENDING_UPLOAD", "PROCESSING", "READY", "FAILED"])
@@ -573,7 +574,7 @@ export const lessonScormUploadInitBodySchema = z
   .object({
     fileName: z.string().min(1).max(255),
     mimeType: z.string().min(1).max(200),
-    sizeBytes: z.number().int().positive().max(lessonScormZipMaxBytes)
+    sizeBytes: z.number().int().positive().max(LESSON_SCORM_ZIP_MAX_BYTES)
   })
   .openapi("LessonScormUploadInitBody");
 
