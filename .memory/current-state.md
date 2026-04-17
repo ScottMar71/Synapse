@@ -31,6 +31,7 @@
   - `GET /api/v1/tenants/:tenantId/courses` — non-archived courses
   - `GET /api/v1/tenants/:tenantId/learners` — users with an active `LEARNER` membership
   - `packages/database` exposes `listCoursesForTenant` and `listLearnersForTenant`; `buildApp` accepts injectable `dataAccess` for tests
+- **Lesson video (spike)**: Conductor deliverable `67e25387-a839-4c36-a680-d407779cc585` — recommendation **decision 012**; watch-state Zod sketches in `packages/contracts/src/lms-api.ts`. `lesson_watch_state` migration + learner watch API + player wiring are follow-on work.
 
 ## In Progress
 

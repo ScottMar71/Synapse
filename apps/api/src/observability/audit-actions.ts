@@ -20,5 +20,7 @@ export const AUDIT_ACTIONS = {
   LESSON_READING_READ: "lesson.reading_read",
   LESSON_READING_PATCH: "lesson.reading_patch",
   LESSON_GLOSSARY_LIST_READ: "lesson.glossary_list_read",
-  LESSON_GLOSSARY_CREATE: "lesson.glossary_create"
+  LESSON_GLOSSARY_CREATE: "lesson.glossary_create",
+  LESSON_GLOSSARY_PATCH: "lesson.glossary_patch",
+  LESSON_GLOSSARY_ARCHIVE: "lesson.glossary_archive"
 } as const;

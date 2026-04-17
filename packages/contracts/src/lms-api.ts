@@ -200,6 +200,27 @@ export const lessonPlaybackDtoSchema = z
   })
   .openapi("LessonPlayback");
 
+/** Resume cursor for video lessons — future `lesson_watch_state` table (`.memory/decisions.md` 012). */
+export const lessonWatchStateDtoSchema = z
+  .object({
+    id: z.string(),
+    tenantId: z.string(),
+    userId: z.string(),
+    lessonId: z.string(),
+    positionSec: z.number().nonnegative(),
+    durationSec: z.number().nonnegative().nullable(),
+    updatedAt: isoDateTime
+  })
+  .openapi("LessonWatchState");
+
+export const lessonWatchStatePatchBodySchema = z
+  .object({
+    positionSec: z.number().nonnegative(),
+    durationSec: z.number().nonnegative().optional(),
+    playedRatio: z.number().min(0).max(1).optional()
+  })
+  .openapi("LessonWatchStatePatchBody");
+
 export const lessonPatchBodySchema = z
   .object({
     title: z.string().min(1).max(500).optional(),
@@ -225,20 +246,49 @@ export const lessonReadingDtoSchema = z
     lessonId: z.string(),
     courseId: z.string(),
     title: z.string(),
-    html: z.string().nullable()
+    html: z.string().nullable(),
+    contentKind: lessonContentKindSchema,
+    updatedAt: isoDateTime
   })
   .openapi("LessonReading");
 
 export const lessonReadingPatchBodySchema = z
   .object({
     title: z.string().min(1).max(500).optional(),
-    content: z.string().max(500_000).nullable().optional()
+    content: z.string().max(500_000).nullable().optional(),
+    /** Must match the lesson's current `updatedAt` from GET reading (optimistic concurrency). */
+    expectedUpdatedAt: isoDateTime
   })
   .refine(
     (body) => body.title !== undefined || body.content !== undefined,
     { message: "At least one field is required" }
   )
   .openapi("LessonReadingPatchBody");
+
+export const staffCourseOutlineLessonSchema = z
+  .object({
+    id: z.string(),
+    moduleId: z.string(),
+    title: z.string(),
+    sortOrder: z.number().int(),
+    contentKind: lessonContentKindSchema
+  })
+  .openapi("StaffCourseOutlineLesson");
+
+export const staffCourseOutlineModuleSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    sortOrder: z.number().int(),
+    lessons: z.array(staffCourseOutlineLessonSchema)
+  })
+  .openapi("StaffCourseOutlineModule");
+
+export const staffCourseLessonOutlineDtoSchema = z
+  .object({
+    modules: z.array(staffCourseOutlineModuleSchema)
+  })
+  .openapi("StaffCourseLessonOutline");
 
 export const lessonGlossaryEntryDtoSchema = z
   .object({
@@ -261,6 +311,18 @@ export const lessonGlossaryCreateBodySchema = z
     sortOrder: z.number().int().optional()
   })
   .openapi("LessonGlossaryCreateBody");
+
+export const lessonGlossaryPatchBodySchema = z
+  .object({
+    term: z.string().min(1).max(500).optional(),
+    definition: z.string().min(1).max(20_000).optional(),
+    sortOrder: z.number().int().optional()
+  })
+  .refine(
+    (body) => body.term !== undefined || body.definition !== undefined || body.sortOrder !== undefined,
+    { message: "At least one field is required" }
+  )
+  .openapi("LessonGlossaryPatchBody");
 
 export const learnerSummarySchema = z
   .object({
@@ -346,11 +408,15 @@ export type LessonVideoCaptionTrackDto = z.infer<typeof lessonVideoCaptionTrackS
 export type LessonVideoAssetDto = z.infer<typeof lessonVideoAssetSchema>;
 export type LessonVideoPlaybackDto = z.infer<typeof lessonVideoPlaybackSchema>;
 export type LessonPlaybackDto = z.infer<typeof lessonPlaybackDtoSchema>;
+export type LessonWatchStateDto = z.infer<typeof lessonWatchStateDtoSchema>;
+export type LessonWatchStatePatchBody = z.infer<typeof lessonWatchStatePatchBodySchema>;
 export type LessonPatchBody = z.infer<typeof lessonPatchBodySchema>;
 export type LessonStaffDto = z.infer<typeof lessonStaffDtoSchema>;
 export type LessonReadingDto = z.infer<typeof lessonReadingDtoSchema>;
 export type LessonReadingPatchBody = z.infer<typeof lessonReadingPatchBodySchema>;
+export type StaffCourseLessonOutlineDto = z.infer<typeof staffCourseLessonOutlineDtoSchema>;
 export type LessonGlossaryEntryDto = z.infer<typeof lessonGlossaryEntryDtoSchema>;
 export type LessonGlossaryCreateBody = z.infer<typeof lessonGlossaryCreateBodySchema>;
+export type LessonGlossaryPatchBody = z.infer<typeof lessonGlossaryPatchBodySchema>;
 export type LearnerSummaryDto = z.infer<typeof learnerSummarySchema>;
 export type LearnerProvisionBody = z.infer<typeof learnerProvisionBodySchema>;

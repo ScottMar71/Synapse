@@ -714,6 +714,55 @@ describe("progress report endpoints", () => {
   });
 });
 
+describe("staff course lesson outline", () => {
+  it("returns outline when staff and data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async listCourseLessonOutlineForStaff() {
+          return {
+            ok: true,
+            outline: {
+              modules: [
+                {
+                  id: "mod-1",
+                  title: "Module 1",
+                  sortOrder: 0,
+                  lessons: [
+                    {
+                      id: "les-1",
+                      moduleId: "mod-1",
+                      title: "Lesson 1",
+                      sortOrder: 0,
+                      contentKind: "READING" as const,
+                      content: "<p>Hello</p>",
+                      updatedAt: "2026-04-17T12:00:00.000Z"
+                    }
+                  ]
+                }
+              ]
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/courses/course-1/lesson-outline`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { outline: { modules: Array<{ lessons: Array<{ id: string }> }> } };
+    };
+    expect(body.data.outline.modules[0]?.lessons[0]?.id).toBe("les-1");
+  });
+});
+
 describe("lesson reading endpoints", () => {
   const readingPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/reading`;
 
@@ -737,7 +786,9 @@ describe("lesson reading endpoints", () => {
               lessonId: "lesson-1",
               courseId: "course-1",
               title: "Chapter 1",
-              html: "<p>Hello</p>"
+              html: "<p>Hello</p>",
+              contentKind: "READING" as const,
+              updatedAt: "2026-04-17T12:00:00.000Z"
             }
           };
         }
@@ -773,7 +824,7 @@ describe("lesson reading endpoints", () => {
     const response = await app.request(readingPath, {
       method: "PATCH",
       headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
-      body: JSON.stringify({ title: "Nope" })
+      body: JSON.stringify({ title: "Nope", expectedUpdatedAt: "2026-04-17T12:00:00.000Z" })
     });
     expect(response.status).toBe(403);
   });
@@ -794,7 +845,9 @@ describe("lesson reading endpoints", () => {
               lessonId: "lesson-1",
               courseId: "course-1",
               title: "Updated",
-              html: null
+              html: null,
+              contentKind: "READING" as const,
+              updatedAt: "2026-04-17T12:00:00.000Z"
             }
           };
         }
@@ -804,7 +857,7 @@ describe("lesson reading endpoints", () => {
     const response = await app.request(readingPath, {
       method: "PATCH",
       headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
-      body: JSON.stringify({ content: null })
+      body: JSON.stringify({ content: null, expectedUpdatedAt: "2026-04-17T12:00:00.000Z" })
     });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { data: { reading: { title: string } } };
@@ -861,7 +914,7 @@ describe("lesson reading endpoints", () => {
       {
         method: "PATCH",
         headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
-        body: JSON.stringify({ title: "X" })
+        body: JSON.stringify({ title: "X", expectedUpdatedAt: "2026-04-17T12:00:00.000Z" })
       }
     );
     expect(response.status).toBe(403);
@@ -993,6 +1046,123 @@ describe("lesson glossary endpoints", () => {
     const response = await app.request(
       `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/glossary`,
       { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(403);
+  });
+
+  const glossaryEntryPath = `${glossaryPath}/entry-1`;
+
+  it("denies glossary PATCH for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async patchLessonGlossaryEntryForStaff() {
+          throw new Error("patchLessonGlossaryEntryForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(glossaryEntryPath, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ term: "X" })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff to PATCH glossary entry when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async patchLessonGlossaryEntryForStaff() {
+          return {
+            ok: true,
+            entry: {
+              id: "entry-1",
+              tenantId: tenantA,
+              lessonId: "lesson-1",
+              term: "Term2",
+              definition: "Def",
+              sortOrder: 2,
+              archivedAt: null,
+              createdAt: "2026-04-17T00:00:00.000Z",
+              updatedAt: "2026-04-17T01:00:00.000Z"
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(glossaryEntryPath, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ term: "Term2" })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { entry: { term: string } } };
+    expect(body.data.entry.term).toBe("Term2");
+  });
+
+  it("allows staff to DELETE glossary entry when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["ADMIN"];
+        }
+      },
+      dataAccess: {
+        async archiveLessonGlossaryEntryForStaff() {
+          return { ok: true, archived: true as const };
+        }
+      }
+    });
+
+    const response = await app.request(glossaryEntryPath, {
+      method: "DELETE",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { archived: boolean } };
+    expect(body.data.archived).toBe(true);
+  });
+
+  it("does not call glossary PATCH data access for cross-tenant requests", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async patchLessonGlossaryEntryForStaff() {
+          throw new Error("patchLessonGlossaryEntryForStaff should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/glossary/entry-1`,
+      {
+        method: "PATCH",
+        headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+        body: JSON.stringify({ term: "X" })
+      }
     );
     expect(response.status).toBe(403);
   });
