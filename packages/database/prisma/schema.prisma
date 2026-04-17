@@ -215,6 +215,7 @@ model LessonWatchState {
   @@map("lesson_watch_states")
 }
 
+/// Curated external URL attached to a lesson (Resources panel). Tenant- and lesson-scoped; soft-delete via archivedAt.
 model LessonExternalLink {
   id          String    @id @default(cuid())
   tenantId    String
