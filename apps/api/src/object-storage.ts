@@ -53,6 +53,28 @@ export function createS3CompatibleStorageAdapter(config: S3CompatibleStorageConf
         })
       );
     },
+    async putObjectBytes(input) {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: input.key,
+          Body: Buffer.from(input.body),
+          ...(input.contentType ? { ContentType: input.contentType } : {})
+        })
+      );
+    },
+    async getObjectBytes(input) {
+      const out = await client.send(
+        new GetObjectCommand({
+          Bucket: config.bucket,
+          Key: input.key
+        })
+      );
+      if (!out.Body) {
+        return new Uint8Array();
+      }
+      return new Uint8Array(await out.Body.transformToByteArray());
+    },
     async createPresignedPutObjectUrl(input) {
       const command = new PutObjectCommand({
         Bucket: config.bucket,

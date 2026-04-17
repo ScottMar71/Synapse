@@ -2197,6 +2197,97 @@ describe("lesson file endpoints", () => {
   });
 });
 
+describe("SCORM lesson endpoints", () => {
+  const scormBase = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/scorm`;
+
+  it("denies SCORM upload-init for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async initLessonScormPackageUploadForStaff() {
+          throw new Error("initLessonScormPackageUploadForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(`${scormBase}/package/upload-init`, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({
+        fileName: "course.zip",
+        mimeType: "application/zip",
+        sizeBytes: 100
+      })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("denies SCORM package process POST for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async beginLessonScormPackageProcessingForStaff() {
+          throw new Error("beginLessonScormPackageProcessingForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(`${scormBase}/package/process`, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("returns SCORM package for staff when data access succeeds", async () => {
+    const pkg = {
+      id: "pkg-1",
+      tenantId: tenantA,
+      lessonId: "lesson-1",
+      status: "READY" as const,
+      originalFileName: "course.zip",
+      sizeBytes: 100,
+      processingError: null as string | null,
+      manifestProfile: "SCORM_12" as const,
+      launchPath: "index.html",
+      title: "t",
+      createdAt: "2026-04-17T00:00:00.000Z",
+      updatedAt: "2026-04-17T00:00:00.000Z"
+    };
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async getLessonScormPackageForStaff() {
+          return { ok: true, pkg };
+        }
+      }
+    });
+
+    const response = await app.request(`${scormBase}/package`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { pkg: { id: string; status: string } } };
+    expect(body.data.pkg?.id).toBe("pkg-1");
+    expect(body.data.pkg?.status).toBe("READY");
+  });
+});
+
 describe("observability", () => {
   it("echoes x-request-id and exposes internal metrics", async () => {
     const app = buildApp({

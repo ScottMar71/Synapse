@@ -5,6 +5,8 @@ import {
   type EnrollmentStatus,
   type LessonBlockType,
   type LessonContentKind,
+  type LessonScormManifestProfile,
+  type LessonScormPackageStatus,
   type ProgressScope,
   type SubmissionStatus
 } from "@prisma/client";
@@ -1334,7 +1336,7 @@ export type LessonPlaybackDto = {
   lesson: {
     id: string;
     title: string;
-    contentKind: "READING" | "VIDEO" | "MIXED";
+    contentKind: "READING" | "VIDEO" | "MIXED" | "SCORM";
     readingContent: string | null;
   };
   video: {
@@ -1348,17 +1350,20 @@ export type LessonPlaybackDto = {
 export type LessonStaffDto = {
   id: string;
   title: string;
-  contentKind: "READING" | "VIDEO" | "MIXED";
+  contentKind: "READING" | "VIDEO" | "MIXED" | "SCORM";
   content: string | null;
   videoAsset: LessonVideoAssetDto | null;
 };
 
-function mapLessonContentKindToApi(kind: LessonContentKind): "READING" | "VIDEO" | "MIXED" {
+function mapLessonContentKindToApi(kind: LessonContentKind): "READING" | "VIDEO" | "MIXED" | "SCORM" {
   if (kind === "VIDEO") {
     return "VIDEO";
   }
   if (kind === "MIXED") {
     return "MIXED";
+  }
+  if (kind === "SCORM") {
+    return "SCORM";
   }
   return "READING";
 }
@@ -1631,7 +1636,11 @@ export async function getLessonPlaybackForViewer(input: {
 
   const raw = lesson.content;
   const readingContent =
-    contentKind === "MIXED" ? null : raw === null || raw.trim() === "" ? null : raw;
+    contentKind === "MIXED" || contentKind === "SCORM"
+      ? null
+      : raw === null || raw.trim() === ""
+        ? null
+        : raw;
 
   if (contentKind === "MIXED") {
     const blockRows = await prisma.lessonBlock.findMany({
@@ -1670,6 +1679,21 @@ export async function getLessonPlaybackForViewer(input: {
     };
   }
 
+  if (contentKind === "SCORM") {
+    return {
+      ok: true,
+      playback: {
+        lesson: {
+          id: lesson.id,
+          title: lesson.title,
+          contentKind,
+          readingContent: null
+        },
+        video: null
+      }
+    };
+  }
+
   return {
     ok: true,
     playback: {
@@ -1692,7 +1716,7 @@ export async function patchLessonForStaff(input: {
   patch: {
     title?: string;
     content?: string | null;
-    contentKind?: "READING" | "VIDEO" | "MIXED";
+    contentKind?: "READING" | "VIDEO" | "MIXED" | "SCORM";
     videoAsset?: LessonVideoAssetDto | null;
   };
 }): Promise<{ ok: true; lesson: LessonStaffDto } | { ok: false; error: ServiceError }> {
@@ -1751,7 +1775,7 @@ export async function patchLessonForStaff(input: {
 
   let nextVideoValue: Prisma.InputJsonValue | typeof Prisma.JsonNull;
 
-  if (nextKind === "READING" || nextKind === "MIXED") {
+  if (nextKind === "READING" || nextKind === "MIXED" || nextKind === "SCORM") {
     nextVideoValue = Prisma.JsonNull;
   } else if (input.patch.videoAsset !== undefined) {
     if (input.patch.videoAsset === null) {
@@ -1978,7 +2002,7 @@ export type LessonReadingDto = {
   courseId: string;
   title: string;
   html: string | null;
-  contentKind: "READING" | "VIDEO" | "MIXED";
+  contentKind: "READING" | "VIDEO" | "MIXED" | "SCORM";
   updatedAt: string;
 };
 
@@ -1987,7 +2011,7 @@ export type StaffCourseOutlineLesson = {
   moduleId: string;
   title: string;
   sortOrder: number;
-  contentKind: "READING" | "VIDEO" | "MIXED";
+  contentKind: "READING" | "VIDEO" | "MIXED" | "SCORM";
 };
 
 export type StaffCourseOutlineModule = {
@@ -3694,4 +3718,690 @@ export async function archiveLessonFileAttachmentForStaff(input: {
   });
 
   return { ok: true, archived: true };
+}
+
+/** Upper bound for staff SCORM zip upload (see lesson file attachments scale). */
+export const MAX_SCORM_PACKAGE_ZIP_BYTES = 120 * 1024 * 1024;
+
+export type LessonScormPackageDto = {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  status: LessonScormPackageStatus;
+  originalFileName: string;
+  sizeBytes: number;
+  processingError: string | null;
+  manifestProfile: LessonScormManifestProfile | null;
+  launchPath: string | null;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LessonScormSessionDto = {
+  tenantId: string;
+  userId: string;
+  lessonId: string;
+  cmiState: Record<string, string>;
+  updatedAt: string;
+};
+
+function lessonScormPackagePrefix(tenantId: string, packageId: string): string {
+  return `tenants/${tenantId}/scorm-packages/${packageId}/`;
+}
+
+function normalizeScormUploadFileName(raw: string): string {
+  const base = raw.trim().replace(/^.*[/\\]/, "");
+  if (!base) {
+    return "package.zip";
+  }
+  return base.length > 255 ? base.slice(0, 255) : base;
+}
+
+function isAllowedScormZipMime(mimeType: string): boolean {
+  const m = mimeType.trim().toLowerCase();
+  return m === "application/zip" || m === "application/x-zip-compressed" || m === "multipart/x-zip";
+}
+
+function mapScormPackageRow(row: {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  status: LessonScormPackageStatus;
+  originalFileName: string;
+  sizeBytes: number;
+  processingError: string | null;
+  manifestProfile: LessonScormManifestProfile | null;
+  launchPath: string | null;
+  title: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): LessonScormPackageDto {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    lessonId: row.lessonId,
+    status: row.status,
+    originalFileName: row.originalFileName,
+    sizeBytes: row.sizeBytes,
+    processingError: row.processingError,
+    manifestProfile: row.manifestProfile,
+    launchPath: row.launchPath,
+    title: row.title,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+/** Normalizes a zip-relative path and rejects traversal. */
+export function normalizeScormAssetRelativePath(raw: string): { ok: true; path: string } | { ok: false; message: string } {
+  const decoded = decodeURIComponent(raw.trim());
+  const swapped = decoded.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!swapped || swapped.endsWith("/")) {
+    return { ok: false, message: "Invalid asset path" };
+  }
+  const segments = swapped.split("/").filter((s) => s.length > 0);
+  if (segments.length === 0 || segments.length > 48) {
+    return { ok: false, message: "Invalid asset path" };
+  }
+  for (const s of segments) {
+    if (s === "." || s === "..") {
+      return { ok: false, message: "Invalid asset path" };
+    }
+  }
+  return { ok: true, path: segments.join("/") };
+}
+
+function scormCmiStateFromJson(raw: Prisma.JsonValue): Record<string, string> {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === "string") {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+export async function initLessonScormPackageUploadForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+  body: { fileName: string; mimeType: string; sizeBytes: number };
+}): Promise<
+  { ok: true; pkg: LessonScormPackageDto; storageKey: string } | { ok: false; error: ServiceError }
+> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const fileName = normalizeScormUploadFileName(input.body.fileName);
+  if (!fileName.toLowerCase().endsWith(".zip")) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "SCORM package must be a .zip file" } };
+  }
+
+  const mimeType = input.body.mimeType.trim();
+  if (!isAllowedScormZipMime(mimeType)) {
+    return {
+      ok: false,
+      error: { code: "INVALID_INPUT", message: "mimeType must be a zip type (application/zip)" }
+    };
+  }
+
+  const sizeBytes = input.body.sizeBytes;
+  if (!Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_SCORM_PACKAGE_ZIP_BYTES) {
+    return {
+      ok: false,
+      error: {
+        code: "INVALID_INPUT",
+        message: `sizeBytes must be between 1 and ${MAX_SCORM_PACKAGE_ZIP_BYTES}`
+      }
+    };
+  }
+
+  await prisma.lessonScormPackage.deleteMany({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId }
+  });
+
+  const id = randomUUID();
+  const prefix = lessonScormPackagePrefix(input.tenantId, id);
+  const zipStorageKey = `${prefix}package.zip`;
+  const extractedPrefix = `${prefix}extracted/`;
+
+  const created = await prisma.lessonScormPackage.create({
+    data: {
+      id,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      zipStorageKey,
+      extractedPrefix,
+      originalFileName: fileName,
+      sizeBytes,
+      status: "PENDING_UPLOAD"
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      status: true,
+      originalFileName: true,
+      sizeBytes: true,
+      processingError: true,
+      manifestProfile: true,
+      launchPath: true,
+      title: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, pkg: mapScormPackageRow(created), storageKey: zipStorageKey };
+}
+
+export async function getLessonScormPackageForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; pkg: LessonScormPackageDto | null } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const row = await prisma.lessonScormPackage.findFirst({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      status: true,
+      originalFileName: true,
+      sizeBytes: true,
+      processingError: true,
+      manifestProfile: true,
+      launchPath: true,
+      title: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, pkg: row ? mapScormPackageRow(row) : null };
+}
+
+export async function getLessonScormPackageForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; pkg: LessonScormPackageDto | null } | { ok: false; error: ServiceError }> {
+  const access = await assertLessonFileViewerAccess({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!access.ok) {
+    return access;
+  }
+
+  const row = await prisma.lessonScormPackage.findFirst({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      status: true,
+      originalFileName: true,
+      sizeBytes: true,
+      processingError: true,
+      manifestProfile: true,
+      launchPath: true,
+      title: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+  if (!row) {
+    return { ok: true, pkg: null };
+  }
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser && row.status !== "READY") {
+    return { ok: true, pkg: null };
+  }
+
+  return { ok: true, pkg: mapScormPackageRow(row) };
+}
+
+export async function beginLessonScormPackageProcessingForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+}): Promise<
+  | { ok: true; packageId: string; zipStorageKey: string; extractedPrefix: string }
+  | { ok: false; error: ServiceError }
+> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const row = await prisma.lessonScormPackage.findFirst({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId },
+    select: { id: true, status: true, zipStorageKey: true, extractedPrefix: true }
+  });
+  if (!row) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "SCORM package not initialized" } };
+  }
+  if (row.status !== "PENDING_UPLOAD") {
+    return {
+      ok: false,
+      error: { code: "BAD_REQUEST", message: "SCORM package is not waiting for processing" }
+    };
+  }
+
+  await prisma.lessonScormPackage.update({
+    where: { id: row.id },
+    data: { status: "PROCESSING", processingError: null }
+  });
+
+  return {
+    ok: true,
+    packageId: row.id,
+    zipStorageKey: row.zipStorageKey,
+    extractedPrefix: row.extractedPrefix
+  };
+}
+
+export async function finalizeLessonScormPackageSuccessForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  packageId: string;
+  roles: MembershipRoleName[];
+  launchPath: string;
+  manifestProfile: LessonScormManifestProfile;
+  title?: string | null;
+}): Promise<{ ok: true; pkg: LessonScormPackageDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const launchPath = input.launchPath.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!launchPath) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "launchPath is required" } };
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const pkg = await tx.lessonScormPackage.findFirst({
+      where: {
+        id: input.packageId,
+        tenantId: input.tenantId,
+        lessonId: input.lessonId,
+        status: "PROCESSING"
+      },
+      select: { id: true }
+    });
+    if (!pkg) {
+      return null;
+    }
+
+    await tx.lesson.update({
+      where: { id: input.lessonId },
+      data: {
+        contentKind: "SCORM",
+        videoAsset: Prisma.JsonNull
+      }
+    });
+
+    return tx.lessonScormPackage.update({
+      where: { id: input.packageId },
+      data: {
+        status: "READY",
+        launchPath,
+        manifestProfile: input.manifestProfile,
+        title:
+          input.title === undefined
+            ? undefined
+            : input.title === null
+              ? null
+              : input.title.trim().slice(0, 500) || null,
+        processingError: null
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        lessonId: true,
+        status: true,
+        originalFileName: true,
+        sizeBytes: true,
+        processingError: true,
+        manifestProfile: true,
+        launchPath: true,
+        title: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+  });
+
+  if (!updated) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "SCORM package is not processing" } };
+  }
+
+  return { ok: true, pkg: mapScormPackageRow(updated) };
+}
+
+export async function finalizeLessonScormPackageFailureForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  packageId: string;
+  roles: MembershipRoleName[];
+  message: string;
+}): Promise<{ ok: true } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const msg = input.message.trim().slice(0, 4000);
+  if (!msg) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "message is required" } };
+  }
+
+  const result = await prisma.lessonScormPackage.updateMany({
+    where: {
+      id: input.packageId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      status: "PROCESSING"
+    },
+    data: {
+      status: "FAILED",
+      processingError: msg,
+      manifestProfile: null,
+      launchPath: null
+    }
+  });
+
+  if (result.count === 0) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "SCORM package is not processing" } };
+  }
+
+  return { ok: true };
+}
+
+export async function resolveLessonScormAssetForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+  relativePath: string;
+}): Promise<
+  { ok: true; storageKey: string; contentType: string } | { ok: false; error: ServiceError }
+> {
+  const access = await assertLessonFileViewerAccess({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!access.ok) {
+    return access;
+  }
+
+  const norm = normalizeScormAssetRelativePath(input.relativePath);
+  if (!norm.ok) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: norm.message } };
+  }
+
+  const pkg = await prisma.lessonScormPackage.findFirst({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId, status: "READY" },
+    select: { extractedPrefix: true }
+  });
+  if (!pkg) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "SCORM package is not available" } };
+  }
+
+  if (!pkg.extractedPrefix.endsWith("/")) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "SCORM package is not available" } };
+  }
+
+  const storageKey = `${pkg.extractedPrefix}${norm.path}`;
+  if (!storageKey.startsWith(pkg.extractedPrefix)) {
+    return { ok: false, error: { code: "FORBIDDEN", message: "Invalid asset path" } };
+  }
+
+  const ext = norm.path.includes(".") ? norm.path.split(".").pop()?.toLowerCase() ?? "" : "";
+  const mimeByExt: Record<string, string> = {
+    html: "text/html; charset=utf-8",
+    htm: "text/html; charset=utf-8",
+    js: "text/javascript; charset=utf-8",
+    css: "text/css; charset=utf-8",
+    json: "application/json; charset=utf-8",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    svg: "image/svg+xml",
+    mp4: "video/mp4",
+    mp3: "audio/mpeg",
+    xml: "application/xml",
+    swf: "application/x-shockwave-flash"
+  };
+  const contentType = mimeByExt[ext] ?? "application/octet-stream";
+
+  return { ok: true, storageKey, contentType };
+}
+
+export async function getLessonScormSessionForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; session: LessonScormSessionDto } | { ok: false; error: ServiceError }> {
+  const access = await assertLessonFileViewerAccess({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!access.ok) {
+    return access;
+  }
+
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { contentKind: true }
+  });
+  if (!lesson || lesson.contentKind !== "SCORM") {
+    return { ok: false, error: { code: "BAD_REQUEST", message: "Lesson is not a SCORM lesson" } };
+  }
+
+  const pkg = await prisma.lessonScormPackage.findFirst({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId, status: "READY" },
+    select: { id: true }
+  });
+  if (!pkg) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "SCORM package is not ready" } };
+  }
+
+  const row = await prisma.lessonScormAttempt.findUnique({
+    where: {
+      tenantId_userId_lessonId: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        lessonId: input.lessonId
+      }
+    },
+    select: { cmiState: true, updatedAt: true }
+  });
+
+  const cmiState = row ? scormCmiStateFromJson(row.cmiState) : {};
+  return {
+    ok: true,
+    session: {
+      tenantId: input.tenantId,
+      userId: input.viewerUserId,
+      lessonId: input.lessonId,
+      cmiState,
+      updatedAt: (row?.updatedAt ?? new Date(0)).toISOString()
+    }
+  };
+}
+
+export async function patchLessonScormSessionForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+  patch: Record<string, string | null>;
+}): Promise<{ ok: true; session: LessonScormSessionDto } | { ok: false; error: ServiceError }> {
+  const access = await assertLessonFileViewerAccess({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!access.ok) {
+    return access;
+  }
+
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { contentKind: true, moduleId: true }
+  });
+  if (!lesson || lesson.contentKind !== "SCORM") {
+    return { ok: false, error: { code: "BAD_REQUEST", message: "Lesson is not a SCORM lesson" } };
+  }
+
+  const pkg = await prisma.lessonScormPackage.findFirst({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId, status: "READY" },
+    select: { id: true }
+  });
+  if (!pkg) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "SCORM package is not ready" } };
+  }
+
+  const existing = await prisma.lessonScormAttempt.findUnique({
+    where: {
+      tenantId_userId_lessonId: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        lessonId: input.lessonId
+      }
+    },
+    select: { cmiState: true }
+  });
+
+  const merged: Record<string, string> = existing ? scormCmiStateFromJson(existing.cmiState) : {};
+  for (const [k, v] of Object.entries(input.patch)) {
+    if (k.length === 0 || k.length > 512) {
+      return { ok: false, error: { code: "INVALID_INPUT", message: "Invalid CMI key" } };
+    }
+    if (v === null) {
+      delete merged[k];
+    } else if (typeof v === "string") {
+      if (v.length > 4000) {
+        return { ok: false, error: { code: "INVALID_INPUT", message: "CMI value is too large" } };
+      }
+      merged[k] = v;
+    }
+  }
+
+  const row = await prisma.lessonScormAttempt.upsert({
+    where: {
+      tenantId_userId_lessonId: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        lessonId: input.lessonId
+      }
+    },
+    create: {
+      tenantId: input.tenantId,
+      userId: input.viewerUserId,
+      lessonId: input.lessonId,
+      cmiState: merged as Prisma.InputJsonValue
+    },
+    update: { cmiState: merged as Prisma.InputJsonValue },
+    select: { cmiState: true, updatedAt: true }
+  });
+
+  const status = merged["cmi.core.lesson_status"]?.toLowerCase();
+  if (status === "completed" || status === "passed") {
+    await upsertProgressForUser({
+      tenantId: input.tenantId,
+      userId: input.viewerUserId,
+      body: {
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        scope: "LESSON",
+        moduleId: lesson.moduleId,
+        lessonId: input.lessonId,
+        percent: 100
+      }
+    });
+  }
+
+  return {
+    ok: true,
+    session: {
+      tenantId: input.tenantId,
+      userId: input.viewerUserId,
+      lessonId: input.lessonId,
+      cmiState: scormCmiStateFromJson(row.cmiState),
+      updatedAt: row.updatedAt.toISOString()
+    }
+  };
 }

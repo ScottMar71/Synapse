@@ -18,6 +18,10 @@ import {
   lessonFileReorderBodySchema,
   lessonFileUploadInitBodySchema,
   lessonFileUploadInstructionSchema,
+  lessonScormPackageDtoSchema,
+  lessonScormSessionDtoSchema,
+  lessonScormSessionPatchBodySchema,
+  lessonScormUploadInitBodySchema,
   lessonExternalLinkCreateBodySchema,
   lessonExternalLinkDtoSchema,
   lessonExternalLinkPatchBodySchema,
@@ -57,6 +61,15 @@ import {
   createLessonGlossaryEntry,
   getActiveMembershipRoles,
   getLessonFileDownloadForViewer,
+  beginLessonScormPackageProcessingForStaff,
+  finalizeLessonScormPackageFailureForStaff,
+  finalizeLessonScormPackageSuccessForStaff,
+  getLessonScormPackageForStaff,
+  getLessonScormPackageForViewer,
+  getLessonScormSessionForViewer,
+  initLessonScormPackageUploadForStaff,
+  patchLessonScormSessionForViewer,
+  resolveLessonScormAssetForViewer,
   getLessonBlocksForViewer,
   getLessonForStaff,
   getLessonPlaybackForViewer,
@@ -74,6 +87,7 @@ import {
   listLessonFileAttachmentsForViewer,
   listLessonGlossaryEntriesForViewer,
   MAX_LESSON_FILE_BYTES,
+  MAX_SCORM_PACKAGE_ZIP_BYTES,
   patchLessonExternalLinkForStaff,
   patchLessonFileAttachmentForStaff,
   patchLessonGlossaryEntryForStaff,
@@ -110,6 +124,8 @@ import { AUDIT_ACTIONS } from "./observability/audit-actions";
 import { emitAuditEvent } from "./observability/audit";
 import { getMetricsSnapshot } from "./observability/metrics";
 import { createObservabilityMiddleware } from "./observability/middleware";
+import { parseImsManifestXml, resolveLaunchPathFromHref } from "./scorm/imsmanifest";
+import { extractScormZipEntries, guessContentTypeFromPath } from "./scorm/process-scorm-zip";
 
 import { Buffer } from "node:buffer";
 
@@ -208,6 +224,15 @@ type DataAccess = {
   reorderLessonFileAttachmentsForStaff: typeof reorderLessonFileAttachmentsForStaff;
   patchLessonFileAttachmentForStaff: typeof patchLessonFileAttachmentForStaff;
   archiveLessonFileAttachmentForStaff: typeof archiveLessonFileAttachmentForStaff;
+  initLessonScormPackageUploadForStaff: typeof initLessonScormPackageUploadForStaff;
+  getLessonScormPackageForStaff: typeof getLessonScormPackageForStaff;
+  getLessonScormPackageForViewer: typeof getLessonScormPackageForViewer;
+  beginLessonScormPackageProcessingForStaff: typeof beginLessonScormPackageProcessingForStaff;
+  finalizeLessonScormPackageSuccessForStaff: typeof finalizeLessonScormPackageSuccessForStaff;
+  finalizeLessonScormPackageFailureForStaff: typeof finalizeLessonScormPackageFailureForStaff;
+  resolveLessonScormAssetForViewer: typeof resolveLessonScormAssetForViewer;
+  getLessonScormSessionForViewer: typeof getLessonScormSessionForViewer;
+  patchLessonScormSessionForViewer: typeof patchLessonScormSessionForViewer;
   getProgressReportSummary: typeof getProgressReportSummary;
   listProgressReportRows: typeof listProgressReportRows;
 };
@@ -294,6 +319,15 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     reorderLessonFileAttachmentsForStaff,
     patchLessonFileAttachmentForStaff,
     archiveLessonFileAttachmentForStaff,
+    initLessonScormPackageUploadForStaff,
+    getLessonScormPackageForStaff,
+    getLessonScormPackageForViewer,
+    beginLessonScormPackageProcessingForStaff,
+    finalizeLessonScormPackageSuccessForStaff,
+    finalizeLessonScormPackageFailureForStaff,
+    resolveLessonScormAssetForViewer,
+    getLessonScormSessionForViewer,
+    patchLessonScormSessionForViewer,
     getProgressReportSummary,
     listProgressReportRows,
     ...dependencies.dataAccess
@@ -1791,6 +1825,418 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       },
       200
     );
+  });
+
+  const postLessonScormUploadInitRoute = createRoute({
+    method: "post",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/scorm/package/upload-init`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonScormUploadInitBodySchema } } }
+    },
+    responses: {
+      201: {
+        description: "Created SCORM package row and presigned PUT URL for the zip",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(
+              z.object({
+                pkg: lessonScormPackageDtoSchema,
+                upload: lessonFileUploadInstructionSchema,
+                limits: z.object({ maxBytes: z.number().int() })
+              })
+            )
+          }
+        }
+      },
+      503: {
+        description: "Object storage signing unavailable",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(postLessonScormUploadInitRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.initLessonScormPackageUploadForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles,
+      body
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    let upload;
+    try {
+      upload = await resolvedDependencies.adapters.storage.createPresignedPutObjectUrl({
+        key: result.storageKey,
+        contentType: body.mimeType.trim(),
+        contentLength: body.sizeBytes
+      });
+    } catch {
+      return c.json({ error: "Object storage signing failed" }, 503) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.SCORM_PACKAGE_UPLOAD_INIT,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, packageId: result.pkg.id }
+    });
+    return c.json(
+      {
+        data: {
+          pkg: result.pkg,
+          upload: { method: "PUT" as const, url: upload.url, headers: upload.headers },
+          limits: { maxBytes: MAX_SCORM_PACKAGE_ZIP_BYTES }
+        }
+      },
+      201
+    );
+  });
+
+  const postLessonScormPackageProcessRoute = createRoute({
+    method: "post",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/scorm/package/process`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description: "Extracted zip, stored assets, validated imsmanifest, lesson set to SCORM when READY",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ pkg: lessonScormPackageDtoSchema }))
+          }
+        }
+      },
+      502: {
+        description: "Object storage read/write failed during processing",
+        content: { "application/json": { schema: apiErrorBodySchema } }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(postLessonScormPackageProcessRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+
+    const started = await resolvedDependencies.dataAccess.beginLessonScormPackageProcessingForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles
+    });
+    if (!started.ok) {
+      const mapped = mapServiceError(started.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+
+    const { packageId, zipStorageKey, extractedPrefix } = started;
+
+    const fail = async (message: string) => {
+      await resolvedDependencies.dataAccess.finalizeLessonScormPackageFailureForStaff({
+        tenantId,
+        courseId,
+        lessonId,
+        packageId,
+        roles: auth.roles,
+        message
+      });
+    };
+
+    let zipBytes: Uint8Array;
+    try {
+      zipBytes = await resolvedDependencies.adapters.storage.getObjectBytes({ key: zipStorageKey });
+    } catch {
+      await fail("Could not read uploaded zip from object storage");
+      return c.json({ error: "Could not read uploaded package from storage" }, 502) as never;
+    }
+
+    if (zipBytes.byteLength === 0) {
+      await fail("Uploaded zip is empty");
+      return c.json({ error: "Uploaded package is empty" }, 400) as never;
+    }
+
+    const extracted = extractScormZipEntries(zipBytes);
+    if (!extracted.ok) {
+      await fail(extracted.error);
+      return c.json({ error: extracted.error }, 400) as never;
+    }
+
+    const parsed = parseImsManifestXml(extracted.manifestXml);
+    if (!parsed.ok) {
+      await fail(parsed.error);
+      return c.json({ error: parsed.error }, 400) as never;
+    }
+    if (parsed.profile === "UNSUPPORTED_SCORM_2004") {
+      await fail(parsed.detail);
+      return c.json({ error: parsed.detail }, 400) as never;
+    }
+
+    const launchResolved = resolveLaunchPathFromHref(extracted.manifestDir, parsed.launchPath);
+    const pathSet = new Set(
+      extracted.files.map((f) => f.path.replace(/\\/g, "/").toLowerCase())
+    );
+    if (!pathSet.has(launchResolved.replace(/\\/g, "/").toLowerCase())) {
+      await fail(`Launch file not found in package: ${launchResolved}`);
+      return c.json({ error: "Launch file from imsmanifest was not found in the zip" }, 400) as never;
+    }
+
+    try {
+      for (const f of extracted.files) {
+        const key = `${extractedPrefix}${f.path}`;
+        const ct = guessContentTypeFromPath(f.path);
+        await resolvedDependencies.adapters.storage.putObjectBytes({
+          key,
+          body: f.body,
+          contentType: ct
+        });
+      }
+    } catch {
+      await fail("Failed to store extracted SCORM files");
+      return c.json({ error: "Failed to store extracted SCORM files" }, 502) as never;
+    }
+
+    const finalized = await resolvedDependencies.dataAccess.finalizeLessonScormPackageSuccessForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      packageId,
+      roles: auth.roles,
+      launchPath: launchResolved,
+      manifestProfile: "SCORM_12",
+      title: parsed.title
+    });
+    if (!finalized.ok) {
+      const mapped = mapServiceError(finalized.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.SCORM_PACKAGE_PROCESS,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, packageId }
+    });
+    return c.json({ data: { pkg: finalized.pkg } }, 200);
+  });
+
+  const getLessonScormPackageRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/scorm/package`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description:
+          "SCORM package metadata (staff sees all statuses; learners only when READY). Null if none.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ pkg: lessonScormPackageDtoSchema.nullable() }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(getLessonScormPackageRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const isStaff = auth.roles.includes("INSTRUCTOR") || auth.roles.includes("ADMIN");
+    const result = isStaff
+      ? await resolvedDependencies.dataAccess.getLessonScormPackageForStaff({
+          tenantId,
+          courseId,
+          lessonId,
+          roles: auth.roles
+        })
+      : await resolvedDependencies.dataAccess.getLessonScormPackageForViewer({
+          tenantId,
+          courseId,
+          lessonId,
+          viewerUserId: auth.session.userId,
+          roles: auth.roles
+        });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.SCORM_PACKAGE_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, hasPkg: Boolean(result.pkg) }
+    });
+    return c.json({ data: { pkg: result.pkg } }, 200);
+  });
+
+  const getLessonScormSessionRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/scorm/session`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description: "Learner SCORM 1.2 CMI state for this lesson",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ session: lessonScormSessionDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(getLessonScormSessionRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.getLessonScormSessionForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.SCORM_SESSION_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+    return c.json({ data: { session: result.session } }, 200);
+  });
+
+  const patchLessonScormSessionRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/scorm/session`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonScormSessionPatchBodySchema } } }
+    },
+    responses: {
+      200: {
+        description: "Updated CMI state (merges keys; null removes)",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ session: lessonScormSessionDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(patchLessonScormSessionRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.patchLessonScormSessionForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles,
+      patch: body.cmiState
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.SCORM_SESSION_PATCH,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+    return c.json({ data: { session: result.session } }, 200);
+  });
+
+  app.get(`${base}/tenants/:tenantId/courses/:courseId/lessons/:lessonId/scorm/assets/*`, async (c) => {
+    const tenantId = c.req.param("tenantId");
+    const courseId = c.req.param("courseId");
+    const lessonId = c.req.param("lessonId");
+    const marker = `${base}/tenants/${tenantId}/courses/${courseId}/lessons/${lessonId}/scorm/assets/`;
+    const idx = c.req.path.indexOf(marker);
+    if (idx === -1) {
+      return c.notFound();
+    }
+    const rawTail = c.req.path.slice(idx + marker.length).split("?")[0] ?? "";
+    let relativePath: string;
+    try {
+      relativePath = decodeURIComponent(rawTail);
+    } catch {
+      return c.json({ error: "Invalid asset path" }, 400);
+    }
+
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response;
+    }
+
+    const resolved = await resolvedDependencies.dataAccess.resolveLessonScormAssetForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles,
+      relativePath
+    });
+    if (!resolved.ok) {
+      const mapped = mapServiceError(resolved.error);
+      return c.json({ error: mapped.message }, mapped.status);
+    }
+
+    let bytes: Uint8Array;
+    try {
+      bytes = await resolvedDependencies.adapters.storage.getObjectBytes({
+        key: resolved.storageKey
+      });
+    } catch {
+      return c.json({ error: "Object storage read failed" }, 502);
+    }
+
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.SCORM_RUNTIME_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+
+    return c.body(Buffer.from(bytes), 200, {
+      "Content-Type": resolved.contentType,
+      "Cache-Control": "private, no-store"
+    });
   });
 
   const patchCourseRoute = createRoute({
