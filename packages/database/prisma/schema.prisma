@@ -63,6 +63,7 @@ model Tenant {
   assessments      Assessment[]
   auditEvents      AuditEvent[]
   lessonGlossaryEntries LessonGlossaryEntry[]
+  lessonExternalLinks   LessonExternalLink[]
 
   @@map("tenants")
 }
@@ -183,12 +184,34 @@ model Lesson {
   module            Module                 @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   progress          Progress[]
   glossaryEntries   LessonGlossaryEntry[]
+  externalLinks     LessonExternalLink[]
   fileAttachments   LessonFileAttachment[]
 
   @@index([tenantId])
   @@index([moduleId])
   @@unique([moduleId, sortOrder])
   @@map("lessons")
+}
+
+/// Curated external URL attached to a lesson (Resources panel). Tenant- and lesson-scoped; soft-delete via archivedAt.
+model LessonExternalLink {
+  id          String    @id @default(cuid())
+  tenantId    String
+  lessonId    String
+  title       String
+  url         String
+  description String?
+  sortOrder   Int       @default(0)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([lessonId])
+  @@index([tenantId, lessonId])
+  @@map("lesson_external_links")
 }
 
 model LessonGlossaryEntry {
