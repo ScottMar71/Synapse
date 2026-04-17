@@ -23,15 +23,7 @@ import {
   lessonGlossaryPatchBodySchema,
   lessonReadingDtoSchema,
   lessonReadingPatchBodySchema,
-  lessonScormPackageDtoSchema,
-  lessonScormPlaybackSchema,
   lmsApiTags,
-  SCORM_PACKAGE_MAX_ZIP_BYTES,
-  scormPackageUploadInitBodySchema,
-  scormPackageUploadInstructionSchema,
-  scormRuntimeQuerySchema,
-  scormSessionDtoSchema,
-  scormSessionPatchBodySchema,
   progressDtoSchema,
   progressPutBodySchema,
   progressReportRowDtoSchema,
@@ -53,14 +45,7 @@ import {
   getActiveMembershipRoles,
   getLessonFileDownloadForViewer,
   getLessonReadingForViewer,
-  beginScormPackageProcessingForStaff,
-  failScormPackageProcessingForStaff,
-  finalizeScormPackageProcessingForStaff,
-  getScormPackageForViewer,
-  getScormRuntimeObjectForViewer,
-  getScormSessionForViewer,
   initLessonFileUploadForStaff,
-  initScormPackageUploadForStaff,
   listCourseCategoriesForTenant,
   listCoursesForTenant,
   listCoursesInCategory,
@@ -103,14 +88,8 @@ import { AUDIT_ACTIONS } from "./observability/audit-actions";
 import { emitAuditEvent } from "./observability/audit";
 import { getMetricsSnapshot } from "./observability/metrics";
 import { createObservabilityMiddleware } from "./observability/middleware";
-import { getObjectBytes } from "./object-storage-binary";
-import { prepareScormZipWorkset, ScormZipError } from "./scorm/analyze-zip";
-import { uploadScormExtractToStorage } from "./scorm/upload-extracted";
-import { signScormRuntimeJwt, verifyScormRuntimeJwt } from "./scorm/runtime-jwt";
 
 import { Buffer } from "node:buffer";
-
-const SCORM_RUNTIME_JWT_TTL_SEC = 3600;
 
 function encodeProgressReportCursor(cursor: ProgressReportListCursor): string {
   return Buffer.from(
@@ -193,14 +172,6 @@ type DataAccess = {
   initLessonFileUploadForStaff: typeof initLessonFileUploadForStaff;
   listLessonFileAttachmentsForViewer: typeof listLessonFileAttachmentsForViewer;
   getLessonFileDownloadForViewer: typeof getLessonFileDownloadForViewer;
-  initScormPackageUploadForStaff: typeof initScormPackageUploadForStaff;
-  beginScormPackageProcessingForStaff: typeof beginScormPackageProcessingForStaff;
-  finalizeScormPackageProcessingForStaff: typeof finalizeScormPackageProcessingForStaff;
-  failScormPackageProcessingForStaff: typeof failScormPackageProcessingForStaff;
-  getScormPackageForViewer: typeof getScormPackageForViewer;
-  getScormRuntimeObjectForViewer: typeof getScormRuntimeObjectForViewer;
-  getScormSessionForViewer: typeof getScormSessionForViewer;
-  patchScormSessionForViewer: typeof patchScormSessionForViewer;
   reorderLessonFileAttachmentsForStaff: typeof reorderLessonFileAttachmentsForStaff;
   patchLessonFileAttachmentForStaff: typeof patchLessonFileAttachmentForStaff;
   archiveLessonFileAttachmentForStaff: typeof archiveLessonFileAttachmentForStaff;
@@ -276,14 +247,6 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     initLessonFileUploadForStaff,
     listLessonFileAttachmentsForViewer,
     getLessonFileDownloadForViewer,
-    initScormPackageUploadForStaff,
-    beginScormPackageProcessingForStaff,
-    finalizeScormPackageProcessingForStaff,
-    failScormPackageProcessingForStaff,
-    getScormPackageForViewer,
-    getScormRuntimeObjectForViewer,
-    getScormSessionForViewer,
-    patchScormSessionForViewer,
     reorderLessonFileAttachmentsForStaff,
     patchLessonFileAttachmentForStaff,
     archiveLessonFileAttachmentForStaff,
