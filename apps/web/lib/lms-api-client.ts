@@ -13,8 +13,12 @@ import type {
   LessonExternalLinkCreateBody,
   LessonExternalLinkDto,
   LessonExternalLinkPatchBody,
+  LessonMixedBlockLearner,
+  LessonMixedBlockPutItem,
+  LessonPatchBody,
   LessonReadingDto,
   LessonReadingPatchBody,
+  LessonStaffDto,
   ProgressDto,
   ProgressPutBody,
   ProgressReportRowDto,
@@ -174,6 +178,56 @@ export async function patchLessonReadingForStaff(
     return parsed;
   }
   return { ok: true, reading: parsed.data.data.reading };
+}
+
+export async function patchLessonForStaff(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  body: LessonPatchBody
+): Promise<{ ok: true; lesson: LessonStaffDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}`,
+    { method: "PATCH", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ lesson: LessonStaffDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, lesson: parsed.data.data.lesson };
+}
+
+export async function fetchLessonMixedBlocks(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; blocks: LessonMixedBlockLearner[] } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/blocks`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ blocks: LessonMixedBlockLearner[] }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, blocks: parsed.data.data.blocks };
+}
+
+export async function putLessonMixedBlocks(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  blocks: LessonMixedBlockPutItem[]
+): Promise<{ ok: true; blocks: LessonMixedBlockLearner[] } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/blocks`,
+    { method: "PUT", headers: authHeaders(session, true), body: JSON.stringify({ blocks }) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ blocks: LessonMixedBlockLearner[] }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, blocks: parsed.data.data.blocks };
 }
 
 export async function fetchLessonGlossaryEntries(
