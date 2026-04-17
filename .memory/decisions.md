@@ -130,6 +130,13 @@
 - **Implementation (API + storage, 2026-04-17):** Prisma `LessonContentKind.SCORM`, `lesson_scorm_packages`, `lesson_scorm_attempts`. `StorageAdapter` gains `getObjectBytes` / `putObjectBytes` (S3 in `apps/api/src/object-storage.ts`; noop returns empty bytes). SCORM 2004 manifests fail processing with a clear error. Learner **iframe + `window.API` bridge** remains a **web** slice; learner lesson page still treats unknown kinds as unsupported reading until that ships.
 - Status: **Active** (spike decisions above; API/storage slice landed for deliverable **520b304c-c989-46d6-87e2-9e5289f8432f**)
 
+### 018 - SCORM learner web UI: first-party launch proxy and iframe constraints
+
+- Date: 2026-04-17
+- Context: Learners must load SCORM HTML through authenticated routes with session cookies on the web app origin.
+- Decision: **`buildScormAssetBrowserUrl`** targets the Next.js **`/api/v1/.../scorm/assets/...`** route, which forwards **`Authorization: Bearer`** from `lms_*` cookies to the Hono API (see `apps/web/app/api/v1/tenants/.../scorm/assets/[...assetPath]/route.ts`). The **iframe** uses a **sandbox** allowing scripts, same-origin, forms, popups, downloads, and modals so typical 1.2 content runs; **Fullscreen** uses the **container element** + standard / webkit fullscreen APIs. Learner-visible notes live in **`learner-scorm-panel.tsx`** (details disclosure). **Completion** in **`Progress`** is driven server-side when **`cmi.core.lesson_status`** is **`completed`** or **`passed`** after session PATCH (`patchLessonScormSessionForViewer`).
+- Status: Active
+
 ### 016 - Lesson external links: cascade, archive, URL policy
 
 - Date: 2026-04-17

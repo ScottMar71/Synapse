@@ -3,6 +3,8 @@ import type {
   LessonFileAttachmentDto,
   LessonGlossaryEntryDto,
   LessonMixedBlockLearner,
+  LessonScormPackageDto,
+  LessonScormSessionDto,
   LessonVideoPlaybackDto,
   LessonWatchStateDto
 } from "@conductor/contracts";
@@ -54,12 +56,29 @@ export type ReadyVideo = {
   navigationModules: LessonNavigationModule[];
 };
 
+export type ReadyScorm = {
+  status: "ready";
+  variant: "scorm";
+  courseTitle: string;
+  lessonTitle: string;
+  pkg: LessonScormPackageDto | null;
+  initialSession: LessonScormSessionDto | null;
+  scormUnavailableMessage: string | null;
+  sessionLoadWarning: string | null;
+  lessonFiles: LessonFileAttachmentDto[];
+  lessonLinks: LessonExternalLinkDto[];
+  lessonGlossary: LessonGlossaryEntryDto[];
+  lessonOutlineModules: LessonOutlineModule[];
+  navigationModules: LessonNavigationModule[];
+};
+
 export type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | ReadyReading
   | ReadyMixed
-  | ReadyVideo;
+  | ReadyVideo
+  | ReadyScorm;
 
 export function sortLessonFiles(files: LessonFileAttachmentDto[]): LessonFileAttachmentDto[] {
   return [...files].sort((a, b) => {
