@@ -15,7 +15,7 @@
     "build": "npm run --workspaces build",
     "build:clean": "npm run build:clean --workspace=@conductor/web",
     "build:vercel-web": "npm run build -w @conductor/contracts && npm run build -w @conductor/auth && npm run build -w @conductor/web",
-    "build:vercel-api": "npm run build -w @conductor/contracts && npm run build -w @conductor/auth && npm run build -w @conductor/platform && npm run build -w @conductor/database && npm run build -w @conductor/api",
+    "build:vercel-api": "npm run prisma:generate -w @conductor/database && npm run build -w @conductor/contracts && npm run build -w @conductor/auth && npm run build -w @conductor/platform && npm run build -w @conductor/database && npm run build -w @conductor/api",
     "typecheck": "npm run --workspaces typecheck",
     "lint": "npm run --workspaces lint",
     "test": "npm run --workspaces --if-present test",
