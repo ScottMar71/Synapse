@@ -14,6 +14,10 @@ export type PresignedGetObjectResult = {
 
 export type StorageAdapter = {
   putObject: (input: { key: string; body: string }) => Promise<void>;
+  /** Binary upload (SCORM extracted assets, zip bytes when not using presigned PUT). */
+  putObjectBytes: (input: { key: string; body: Uint8Array; contentType?: string }) => Promise<void>;
+  /** Server-side read for SCORM package processing and streaming. */
+  getObjectBytes: (input: { key: string }) => Promise<Uint8Array>;
   createPresignedPutObjectUrl: (input: {
     key: string;
     contentType: string;
@@ -57,6 +61,12 @@ export function createNoopPlatformAdapters(): PlatformAdapters {
     storage: {
       async putObject() {
         return;
+      },
+      async putObjectBytes() {
+        return;
+      },
+      async getObjectBytes() {
+        return new Uint8Array();
       },
       async createPresignedPutObjectUrl() {
         return { url: "https://example.invalid/presigned-put", headers: {} };

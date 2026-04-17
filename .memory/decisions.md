@@ -127,7 +127,8 @@
 | `cmi.student_id`, `cmi.student_name` | **Do not** echo PII from packages; return **opaque internal ids** or **stable pseudonyms** if the API must respond. |
 | SCORM 2004 `cmi.completion_status` / `cmi.success_status` | **Defer** to 2004 slice; conceptually same completion mapping as 1.2 `lesson_status` once RTE is 1484. |
 
-- Status: **Proposed** (close spike after tech-lead review; then set **Active** like decision 012)
+- **Implementation (API + storage, 2026-04-17):** Prisma `LessonContentKind.SCORM`, `lesson_scorm_packages`, `lesson_scorm_attempts`. `StorageAdapter` gains `getObjectBytes` / `putObjectBytes` (S3 in `apps/api/src/object-storage.ts`; noop returns empty bytes). SCORM 2004 manifests fail processing with a clear error. Learner **iframe + `window.API` bridge** remains a **web** slice; learner lesson page still treats unknown kinds as unsupported reading until that ships.
+- Status: **Active** (spike decisions above; API/storage slice landed for deliverable **520b304c-c989-46d6-87e2-9e5289f8432f**)
 
 ### 016 - Lesson external links: cascade, archive, URL policy
 

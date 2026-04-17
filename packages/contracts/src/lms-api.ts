@@ -199,7 +199,9 @@ export const lessonVideoHttpUrlSchema = z
   .min(1)
   .refine(isSafeHttpUrl, { message: "URL must use http or https" });
 
-export const lessonContentKindSchema = z.enum(["READING", "VIDEO", "MIXED"]).openapi("LessonContentKind");
+export const lessonContentKindSchema = z
+  .enum(["READING", "VIDEO", "MIXED", "SCORM"])
+  .openapi("LessonContentKind");
 
 export const lessonMixedBlockTypeSchema = z.enum(["READING", "VIDEO"]).openapi("LessonMixedBlockType");
 
@@ -540,6 +542,58 @@ export const lessonFilePatchBodySchema = z
   )
   .openapi("LessonFilePatchBody");
 
+const lessonScormZipMaxBytes = 120 * 1024 * 1024;
+
+export const lessonScormPackageStatusSchema = z
+  .enum(["PENDING_UPLOAD", "PROCESSING", "READY", "FAILED"])
+  .openapi("LessonScormPackageStatus");
+
+export const lessonScormManifestProfileSchema = z
+  .enum(["SCORM_12", "UNSUPPORTED_SCORM_2004"])
+  .openapi("LessonScormManifestProfile");
+
+export const lessonScormPackageDtoSchema = z
+  .object({
+    id: z.string(),
+    tenantId: z.string(),
+    lessonId: z.string(),
+    status: lessonScormPackageStatusSchema,
+    originalFileName: z.string(),
+    sizeBytes: z.number().int(),
+    processingError: z.string().nullable(),
+    manifestProfile: lessonScormManifestProfileSchema.nullable(),
+    launchPath: z.string().nullable(),
+    title: z.string().nullable(),
+    createdAt: isoDateTime,
+    updatedAt: isoDateTime
+  })
+  .openapi("LessonScormPackage");
+
+export const lessonScormUploadInitBodySchema = z
+  .object({
+    fileName: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(200),
+    sizeBytes: z.number().int().positive().max(lessonScormZipMaxBytes)
+  })
+  .openapi("LessonScormUploadInitBody");
+
+export const lessonScormSessionDtoSchema = z
+  .object({
+    tenantId: z.string(),
+    userId: z.string(),
+    lessonId: z.string(),
+    cmiState: z.record(z.string(), z.string()),
+    updatedAt: isoDateTime
+  })
+  .openapi("LessonScormSession");
+
+export const lessonScormSessionPatchBodySchema = z
+  .object({
+    cmiState: z.record(z.string(), z.union([z.string(), z.null()]))
+  })
+  .refine((body) => Object.keys(body.cmiState).length <= 200, { message: "Too many CMI keys" })
+  .openapi("LessonScormSessionPatchBody");
+
 export const learnerSummarySchema = z
   .object({
     id: z.string(),
@@ -646,5 +700,9 @@ export type LessonFileUploadInstruction = z.infer<typeof lessonFileUploadInstruc
 export type LessonFileDownloadDto = z.infer<typeof lessonFileDownloadDtoSchema>;
 export type LessonFileReorderBody = z.infer<typeof lessonFileReorderBodySchema>;
 export type LessonFilePatchBody = z.infer<typeof lessonFilePatchBodySchema>;
+export type LessonScormPackageDto = z.infer<typeof lessonScormPackageDtoSchema>;
+export type LessonScormUploadInitBody = z.infer<typeof lessonScormUploadInitBodySchema>;
+export type LessonScormSessionDto = z.infer<typeof lessonScormSessionDtoSchema>;
+export type LessonScormSessionPatchBody = z.infer<typeof lessonScormSessionPatchBodySchema>;
 export type LearnerSummaryDto = z.infer<typeof learnerSummarySchema>;
 export type LearnerProvisionBody = z.infer<typeof learnerProvisionBodySchema>;

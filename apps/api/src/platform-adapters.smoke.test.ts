@@ -36,6 +36,12 @@ function adaptersViaExplicit(): PlatformAdapters {
       async putObject() {
         return;
       },
+      async putObjectBytes() {
+        return;
+      },
+      async getObjectBytes() {
+        return new Uint8Array();
+      },
       async createPresignedPutObjectUrl() {
         return { url: "https://example.invalid/put", headers: {} };
       },

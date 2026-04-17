@@ -38,6 +38,20 @@ enum LessonContentKind {
   VIDEO
   /// Ordered segments in `lesson_blocks` (reading + video segments); see migration notes.
   MIXED
+  /// SCORM 1.2 package (`lesson_scorm_packages`); see `.memory/decisions.md` **015**.
+  SCORM
+}
+
+enum LessonScormPackageStatus {
+  PENDING_UPLOAD
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum LessonScormManifestProfile {
+  SCORM_12
+  UNSUPPORTED_SCORM_2004
 }
 
 enum LessonBlockType {
@@ -73,6 +87,7 @@ model Tenant {
   lessonExternalLinks   LessonExternalLink[]
   lessonWatchStates     LessonWatchState[]
   lessonBlocks          LessonBlock[]
+  lessonScormAttempts   LessonScormAttempt[]
 
   @@map("tenants")
 }
@@ -95,6 +110,7 @@ model User {
   progress     Progress[]
   auditEvents  AuditEvent[]
   lessonWatchStates LessonWatchState[]
+  lessonScormAttempts LessonScormAttempt[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -198,6 +214,8 @@ model Lesson {
   fileAttachments   LessonFileAttachment[]
   watchStates       LessonWatchState[]
   blocks            LessonBlock[]
+  scormPackage      LessonScormPackage?
+  scormAttempts     LessonScormAttempt[]
 
   @@index([tenantId])
   @@index([moduleId])
@@ -304,6 +322,46 @@ model LessonFileAttachment {
   @@index([lessonId])
   @@index([tenantId, lessonId])
   @@map("lesson_file_attachments")
+}
+
+/// Uploaded SCORM zip + extracted objects under `extractedPrefix` (decision **015**).
+model LessonScormPackage {
+  id               String                    @id @default(cuid())
+  tenantId         String
+  lessonId         String                    @unique
+  zipStorageKey    String                    @unique
+  extractedPrefix  String
+  title            String?
+  originalFileName String
+  sizeBytes        Int
+  status           LessonScormPackageStatus  @default(PENDING_UPLOAD)
+  processingError  String?
+  manifestProfile  LessonScormManifestProfile?
+  launchPath       String?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  lesson           Lesson                    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("lesson_scorm_packages")
+}
+
+/// Per-learner SCORM 1.2 CMI values as a flat string map (`cmi.core.lesson_status`, etc.).
+model LessonScormAttempt {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  lessonId  String
+  cmiState  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, lessonId])
+  @@index([tenantId, lessonId])
+  @@map("lesson_scorm_attempts")
 }
 
 model Enrollment {
