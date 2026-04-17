@@ -244,6 +244,22 @@ export async function patchLessonReadingForStaff(
   return { ok: true, reading: parsed.data.data.reading };
 }
 
+export async function fetchLessonForStaff(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; lesson: LessonStaffDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ lesson: LessonStaffDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, lesson: parsed.data.data.lesson };
+}
+
 export async function patchLessonForStaff(
   session: LmsApiSession,
   courseId: string,

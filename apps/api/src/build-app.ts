@@ -58,6 +58,7 @@ import {
   getActiveMembershipRoles,
   getLessonFileDownloadForViewer,
   getLessonBlocksForViewer,
+  getLessonForStaff,
   getLessonPlaybackForViewer,
   getLessonReadingForViewer,
   getLessonWatchStateForViewer,
@@ -184,6 +185,7 @@ type DataAccess = {
   updateCourse: typeof updateCourse;
   listCourseLessonOutlineForStaff: typeof listCourseLessonOutlineForStaff;
   listCourseLessonOutlineForViewer: typeof listCourseLessonOutlineForViewer;
+  getLessonForStaff: typeof getLessonForStaff;
   patchLessonForStaff: typeof patchLessonForStaff;
   getLessonReadingForViewer: typeof getLessonReadingForViewer;
   getLessonPlaybackForViewer: typeof getLessonPlaybackForViewer;
@@ -269,6 +271,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     updateCourse,
     listCourseLessonOutlineForStaff,
     listCourseLessonOutlineForViewer,
+    getLessonForStaff,
     patchLessonForStaff,
     getLessonReadingForViewer,
     getLessonPlaybackForViewer,
@@ -859,6 +862,51 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       { data: { watchState: result.watchState, completion: result.completion } },
       200
     );
+  });
+
+  const getLessonStaffRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description:
+          "Staff lesson record (title, content kind, reading body, video asset JSON). Use for authoring when playback is unavailable (for example video lesson with no source yet).",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ lesson: lessonStaffDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(getLessonStaffRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.getLessonForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_STAFF_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+    return c.json({ data: { lesson: result.lesson } }, 200);
   });
 
   const patchLessonRoute = createRoute({

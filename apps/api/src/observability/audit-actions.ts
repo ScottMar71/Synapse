@@ -16,6 +16,7 @@ export const AUDIT_ACTIONS = {
   COURSE_UPDATE: "course.update",
   REPORTS_PROGRESS_READ: "reports.progress_read",
   LESSON_PLAYBACK_READ: "lesson.playback_read",
+  LESSON_STAFF_READ: "lesson.staff_read",
   LESSON_PATCH: "lesson.patch",
   LESSON_READING_READ: "lesson.reading_read",
   LESSON_READING_PATCH: "lesson.reading_patch",
