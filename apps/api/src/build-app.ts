@@ -30,15 +30,7 @@ import {
   progressReportRowsQuerySchema,
   progressReportSharedQuerySchema,
   progressReportSummaryDtoSchema,
-  SCORM_PACKAGE_MAX_ZIP_BYTES,
-  scormPackageUploadInitBodySchema,
-  scormPackageUploadInstructionSchema,
-  scormRuntimeQuerySchema,
-  scormSessionDtoSchema,
-  scormSessionPatchBodySchema,
   staffCourseLessonOutlineDtoSchema,
-  lessonScormPackageDtoSchema,
-  lessonScormPlaybackSchema,
   submissionDtoSchema,
   z
 } from "@conductor/contracts";
@@ -46,21 +38,14 @@ import {
   archiveCourseCategory,
   archiveLessonFileAttachmentForStaff,
   archiveLessonGlossaryEntryForStaff,
-  beginScormPackageProcessingForStaff,
   createCourseCategory,
   createEnrollment,
-  failScormPackageProcessingForStaff,
-  finalizeScormPackageProcessingForStaff,
   getCourseForViewer,
   createLessonGlossaryEntry,
   getActiveMembershipRoles,
   getLessonFileDownloadForViewer,
   getLessonReadingForViewer,
-  getScormPackageForViewer,
-  getScormRuntimeObjectForViewer,
-  getScormSessionForViewer,
   initLessonFileUploadForStaff,
-  initScormPackageUploadForStaff,
   listCourseCategoriesForTenant,
   listCoursesForTenant,
   listCoursesInCategory,
@@ -73,7 +58,6 @@ import {
   MAX_LESSON_FILE_BYTES,
   patchLessonFileAttachmentForStaff,
   patchLessonGlossaryEntryForStaff,
-  patchScormSessionForViewer,
   listProgressForUser,
   listPublishedCoursesForTenant,
   patchLessonReadingForStaff,
@@ -104,10 +88,6 @@ import { AUDIT_ACTIONS } from "./observability/audit-actions";
 import { emitAuditEvent } from "./observability/audit";
 import { getMetricsSnapshot } from "./observability/metrics";
 import { createObservabilityMiddleware } from "./observability/middleware";
-import { getObjectBytes } from "./object-storage-binary";
-import { ScormZipError, prepareScormZipWorkset } from "./scorm/analyze-zip";
-import { scormRuntimeJwtSecret, signScormRuntimeJwt, verifyScormRuntimeJwt } from "./scorm/runtime-jwt";
-import { uploadScormExtractToStorage } from "./scorm/upload-extracted";
 
 import { Buffer } from "node:buffer";
 
@@ -197,14 +177,6 @@ type DataAccess = {
   archiveLessonFileAttachmentForStaff: typeof archiveLessonFileAttachmentForStaff;
   getProgressReportSummary: typeof getProgressReportSummary;
   listProgressReportRows: typeof listProgressReportRows;
-  initScormPackageUploadForStaff: typeof initScormPackageUploadForStaff;
-  beginScormPackageProcessingForStaff: typeof beginScormPackageProcessingForStaff;
-  finalizeScormPackageProcessingForStaff: typeof finalizeScormPackageProcessingForStaff;
-  failScormPackageProcessingForStaff: typeof failScormPackageProcessingForStaff;
-  getScormPackageForViewer: typeof getScormPackageForViewer;
-  getScormRuntimeObjectForViewer: typeof getScormRuntimeObjectForViewer;
-  getScormSessionForViewer: typeof getScormSessionForViewer;
-  patchScormSessionForViewer: typeof patchScormSessionForViewer;
 };
 
 type AppDependencies = {
@@ -280,14 +252,6 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     archiveLessonFileAttachmentForStaff,
     getProgressReportSummary,
     listProgressReportRows,
-    initScormPackageUploadForStaff,
-    beginScormPackageProcessingForStaff,
-    finalizeScormPackageProcessingForStaff,
-    failScormPackageProcessingForStaff,
-    getScormPackageForViewer,
-    getScormRuntimeObjectForViewer,
-    getScormSessionForViewer,
-    patchScormSessionForViewer,
     ...dependencies.dataAccess
   } as DataAccess;
 
@@ -307,8 +271,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
   async function authorizeRequest(
     context: Context,
     tenantId: string,
-    requiredRoles?: MembershipRole[],
-    opts?: { scormRuntimeLesson?: { courseId: string; lessonId: string } }
+    requiredRoles?: MembershipRole[]
   ): Promise<
     | { ok: true; session: { userId: string; tenantId: string }; roles: MembershipRole[] }
     | { ok: false; response: Response }
@@ -317,22 +280,6 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     const result = await authorizer.authorize({ token, requestTenantId: tenantId, requiredRoles });
     if (result.ok) {
       return { ok: true, session: result.session, roles: result.roles };
-    }
-    if (opts?.scormRuntimeLesson && scormRuntimeJwtSecret()) {
-      const rawToken = context.req.query("access_token");
-      const payload = verifyScormRuntimeJwt(typeof rawToken === "string" ? rawToken : undefined);
-      if (
-        payload &&
-        payload.tid === tenantId &&
-        payload.cid === opts.scormRuntimeLesson.courseId &&
-        payload.lid === opts.scormRuntimeLesson.lessonId
-      ) {
-        return {
-          ok: true,
-          session: { userId: payload.sub, tenantId: payload.tid },
-          roles: ["LEARNER"]
-        };
-      }
     }
     return {
       ok: false,
@@ -1107,7 +1054,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       lessonId,
       fileId,
       roles: auth.roles,
-      patch: { fileName: body.fileName, description: body.description }
+      patch: { fileName: body.fileName, description: body.description, sortOrder: body.sortOrder }
     });
     if (!result.ok) {
       const mapped = mapServiceError(result.error);
