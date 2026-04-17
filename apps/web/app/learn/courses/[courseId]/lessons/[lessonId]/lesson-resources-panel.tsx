@@ -12,7 +12,7 @@ import { useCallback, useState } from "react";
 import { fetchLessonFileDownload, type LmsApiSession } from "../../../../../../lib/lms-api-client";
 
 import { sortGlossaryEntries, sortLessonFiles, sortLessonLinks } from "./learner-lesson-types";
-import styles from "./reading-lesson-view.module.css";
+import styles from "./lesson-resources-panel.module.css";
 
 function formatByteSize(bytes: number): string {
   if (bytes < 1024) {

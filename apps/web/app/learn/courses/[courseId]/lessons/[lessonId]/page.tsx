@@ -5,7 +5,6 @@ import {
   LessonNavigation,
   LessonOutline,
   LessonViewerLayout,
-  LessonViewerReadingMeasure,
   getAdjacentLessonsByModuleOrder
 } from "@conductor/ui";
 import Link from "next/link";
@@ -14,10 +13,9 @@ import type { ReactElement } from "react";
 import { useMemo } from "react";
 
 import { getSession } from "../../../../../../lib/lms-session";
-import { LearnerVideoPanel } from "./learner-video-panel";
+import { LearnerLessonMainStage } from "./learner-lesson-main-stage";
 import { NextLessonLink, NextOutlineLink } from "./learner-lesson-nav-links";
 import { LessonResourcesPanel } from "./lesson-resources-panel";
-import { MixedLessonSegments } from "./mixed-lesson-segments";
 import styles from "./reading-lesson-view.module.css";
 import { useLearnerLessonPage } from "./use-learner-lesson-page";
 
@@ -140,53 +138,14 @@ export default function LearnerLessonPage(): ReactElement {
       resources={resourcesPanel}
       mainAriaLabel={mainAriaLabel}
     >
-      {state.variant === "reading" ? (
-        <LessonViewerReadingMeasure>
-          {state.html ? (
-            <div
-              className={styles.readingHtml}
-              dangerouslySetInnerHTML={{ __html: state.html }}
-            />
-          ) : (
-            <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-              No reading content has been published for this lesson yet.
-            </p>
-          )}
-        </LessonViewerReadingMeasure>
-      ) : state.variant === "video" ? (
-        (() => {
-          const session = getSession();
-          return session ? (
-            <LearnerVideoPanel
-              key={`${lessonId}-${state.initialWatchState?.id ?? "none"}`}
-              session={session}
-              courseId={courseId}
-              lessonId={lessonId}
-              video={state.video}
-              initialWatchState={state.initialWatchState}
-              lessonComplete={lessonComplete}
-              lessonTitle={state.lessonTitle}
-              onWatchPatchResult={async (applied) => {
-                if (applied) {
-                  await refreshOutlineProgress();
-                }
-              }}
-            />
-          ) : (
-            <p role="alert">Session missing. Sign in again.</p>
-          );
-        })()
-      ) : state.blocks.length === 0 ? (
-        <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-          This mixed lesson does not have any segments yet.
-        </p>
-      ) : (
-        <MixedLessonSegments
-          key={lessonId}
-          blocks={state.blocks}
-          onAllVideoThresholdsMetChange={setMixedVideosReady}
-        />
-      )}
+      <LearnerLessonMainStage
+        state={state}
+        courseId={courseId}
+        lessonId={lessonId}
+        lessonComplete={lessonComplete}
+        setMixedVideosReady={setMixedVideosReady}
+        refreshOutlineProgress={refreshOutlineProgress}
+      />
 
       <div className={styles.actions}>
         <Button
