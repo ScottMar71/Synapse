@@ -30,6 +30,26 @@ Output is written to `packages/ui/storybook-static/` (gitignored).
 - `src/patterns/` — page shell, data table, navigation.
 - `src/lms/` — course card, quiz shell, learner dashboard widgets, etc. (see `src/lms/README.md`).
 
+## Video lessons: LMS API and `VideoPlayer`
+
+Primary **VIDEO** lessons persist source metadata in Postgres as **`lessons.videoAsset`** (JSON). The shape matches **`lessonVideoAssetSchema`** in **`@conductor/contracts`** (`sourceUrl`, optional `posterUrl`, optional `captions`). Learners receive an enrollment-gated assembly from the API:
+
+| Concern | HTTP | Contracts |
+|--------|------|-----------|
+| Playback (src, poster, captions) | `GET /api/v1/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/playback` | `lessonPlaybackDtoSchema` → `video`: **`lessonVideoPlaybackSchema`** when `contentKind` is **VIDEO** |
+| Resume cursor | `GET` / `PATCH` same path with `/watch-state` | `lessonWatchStateDtoSchema`, `lessonWatchStatePatchBodySchema`, **`lessonWatchCompletionResultSchema`** |
+| Staff metadata | `PATCH .../lessons/{lessonId}` | `lessonPatchBodySchema` (`videoAsset`) |
+
+**`VideoPlayer`** mapping (production reference: `apps/web/app/learn/courses/[courseId]/lessons/[lessonId]/learner-video-panel.tsx`):
+
+- `LessonVideoPlaybackDto.src` → `src`
+- `poster` → `poster` on **`VideoPlayer`** (passed through to `<video>`)
+- `captions` → `captions` (each track matches **`lessonVideoCaptionTrackSchema`** / **`VideoCaptionTrack`**)
+
+Debounce **`PATCH /watch-state`** from **`onProgress`**; flush on pause, end, and threshold. Default **`watchedThreshold={0.8}`** matches the API completion threshold for **`Progress`** (`scope: LESSON`).
+
+**MIXED** lessons return video segments in **`playback.blocks`** (`lessonMixedBlockLearnerVideoSchema`). Watch-state endpoints apply only to top-level **VIDEO** lessons; per-segment resume for mixed lessons is deferred (decision **017**).
+
 ## Consumers
 
 Apps should depend on `@conductor/ui` and import published entry points from `src/index.ts`. Ensure the app imports design tokens (for example `@conductor/design-tokens/tokens.css` in global styles) so CSS variables resolve.
