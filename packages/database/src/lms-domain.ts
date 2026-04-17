@@ -1533,6 +1533,34 @@ export async function assertStaffLessonInCourse(input: {
   return { ok: true };
 }
 
+export async function getLessonForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; lesson: LessonStaffDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse(input);
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const row = await prisma.lesson.findFirst({
+    where: { id: input.lessonId, tenantId: input.tenantId, archivedAt: null },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      contentKind: true,
+      videoAsset: true
+    }
+  });
+  if (!row) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  return { ok: true, lesson: toLessonStaffDto(row) };
+}
+
 export async function getLessonPlaybackForViewer(input: {
   tenantId: string;
   courseId: string;

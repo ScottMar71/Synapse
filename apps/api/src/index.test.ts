@@ -1013,6 +1013,69 @@ describe("lesson playback endpoint", () => {
   });
 });
 
+describe("lesson staff GET endpoint", () => {
+  const lessonPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1`;
+
+  it("returns staff lesson when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async getLessonForStaff() {
+          return {
+            ok: true,
+            lesson: {
+              id: "lesson-1",
+              title: "Intro video",
+              contentKind: "VIDEO" as const,
+              content: null,
+              videoAsset: {
+                sourceUrl: "https://cdn.example.com/clip.mp4",
+                posterUrl: null
+              }
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(lessonPath, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { lesson: { title: string; videoAsset: { sourceUrl: string } | null } };
+    };
+    expect(body.data.lesson.title).toBe("Intro video");
+    expect(body.data.lesson.videoAsset?.sourceUrl).toBe("https://cdn.example.com/clip.mp4");
+  });
+
+  it("denies lesson staff GET for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async getLessonForStaff() {
+          throw new Error("getLessonForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(lessonPath, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(403);
+  });
+});
+
 describe("lesson watch state endpoints", () => {
   const watchPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/watch-state`;
 
