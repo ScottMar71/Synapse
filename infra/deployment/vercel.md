@@ -13,7 +13,14 @@ Link the GitHub repository once, then create **two Vercel projects** pointing at
 
 ### Web environment variables
 
-Set in Vercel → Project → Settings → Environment Variables (at minimum whatever the web app reads at runtime; extend when the app uses `NEXT_PUBLIC_*` for API URLs).
+Set in Vercel → Project → Settings → Environment Variables.
+
+| Variable | Notes |
+| -------- | ----- |
+| `LMS_API_ORIGIN` | **Required on Vercel.** Public origin of the API deployment (for example `https://your-api.vercel.app`, no path). Must be present **at build time**: `apps/web/next.config.mjs` rewrites `/api/v1/*` to this host, and that value is fixed when `next build` runs. Also used at runtime by the SCORM asset proxy route. Scope it to Production and Preview (and Development if you deploy previews from CLI). |
+| `NEXT_PUBLIC_SITE_URL` | Optional. Canonical site URL for absolute links; if unset, `VERCEL_URL` is used on Vercel. |
+
+Extend with any other keys the web app reads at runtime (for example additional `NEXT_PUBLIC_*` values).
 
 ## 2. API (`apps/api`)
 

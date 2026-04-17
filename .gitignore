@@ -39,3 +39,5 @@ dist/
 .zencoder/
 skills-lock.json
 skills/
+.vercel
+.env*.local

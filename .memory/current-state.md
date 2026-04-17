@@ -42,6 +42,7 @@
 ## Deployment
 
 - Vercel-oriented config: `apps/web/vercel.json`, `apps/api/vercel.json`, root `build:vercel-web` / `build:vercel-api`, Hono Vercel handler at `apps/api/api/[[...route]].ts`.
+- Web project on Vercel must set **`LMS_API_ORIGIN`** (public API origin) for Production and Preview **at build time**; `apps/web/next.config.mjs` fails the build on Vercel when it is missing so `/api/v1` rewrites cannot silently target localhost.
 - Supabase-ready Prisma: `DIRECT_URL` + `DATABASE_URL` in schema; `.env.example` at repo root.
 - CI: GitHub Actions workflow for verify pipeline.
 - Portability: `packages/platform` includes **jobs** adapter and `mergePlatformAdapters`; `infra/portability/hosting-split-playbook.md` describes moving API off Vercel; smoke tests in `apps/api/src/platform-adapters.smoke.test.ts`.
