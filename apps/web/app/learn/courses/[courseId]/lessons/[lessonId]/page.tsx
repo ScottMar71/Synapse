@@ -6,264 +6,33 @@ import {
   LessonOutline,
   LessonViewerLayout,
   LessonViewerReadingMeasure,
-  Link as UiLink,
   getAdjacentLessonsByModuleOrder
 } from "@conductor/ui";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import type { ReactElement, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactElement } from "react";
+import { useMemo } from "react";
 
-import type {
-  LessonExternalLinkDto,
-  ProgressDto,
-  StaffCourseLessonOutlineDto
-} from "@conductor/contracts";
-
-import {
-  fetchCourse,
-  fetchCourseLessonOutline,
-  fetchLessonExternalLinks,
-  fetchLessonReading,
-  fetchProgress,
-  putProgress
-} from "../../../../../../lib/lms-api-client";
-import { getSession } from "../../../../../../lib/lms-session";
-import { mapOutlineForLearner } from "../../learner-outline-map";
+import { NextLessonLink, NextOutlineLink } from "./learner-lesson-nav-links";
+import { LessonResourcesPanel } from "./lesson-resources-panel";
+import { MixedLessonSegments } from "./mixed-lesson-segments";
 import styles from "./reading-lesson-view.module.css";
+import { useLearnerLessonPage } from "./use-learner-lesson-page";
 
-const READING_SCROLL_COMPLETE_RATIO = 0.9;
-
-function NextLessonLink({
-  href,
-  className,
-  children
-}: {
-  href: string;
-  className?: string;
-  children: ReactNode;
-}): ReactElement {
-  return (
-    <Link href={href} className={className}>
-      {children}
-    </Link>
-  );
-}
-
-function NextOutlineLink({
-  href,
-  className,
-  children,
-  "aria-current": ariaCurrent,
-  "aria-label": ariaLabel
-}: {
-  href: string;
-  className?: string;
-  children: ReactNode;
-  "aria-current"?: "page" | boolean | undefined;
-  "aria-label"?: string;
-}): ReactElement {
-  return (
-    <Link href={href} className={className} aria-current={ariaCurrent} aria-label={ariaLabel}>
-      {children}
-    </Link>
-  );
-}
-
-type LoadState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | {
-      status: "ready";
-      courseTitle: string;
-      lessonTitle: string;
-      html: string | null;
-      lessonLinks: LessonExternalLinkDto[];
-      lessonOutlineModules: ReturnType<typeof mapOutlineForLearner>["lessonOutlineModules"];
-      navigationModules: ReturnType<typeof mapOutlineForLearner>["navigationModules"];
-    };
-
-function sortLessonLinks(links: LessonExternalLinkDto[]): LessonExternalLinkDto[] {
-  return [...links].sort((a, b) => {
-    if (a.sortOrder !== b.sortOrder) {
-      return a.sortOrder - b.sortOrder;
-    }
-    return a.id.localeCompare(b.id);
-  });
-}
-
-export default function LearnerReadingLessonPage(): ReactElement {
+export default function LearnerLessonPage(): ReactElement {
   const params = useParams();
   const courseId = typeof params.courseId === "string" ? params.courseId : "";
   const lessonId = typeof params.lessonId === "string" ? params.lessonId : "";
 
-  const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [lessonPercent, setLessonPercent] = useState(0);
-  const [completeMessage, setCompleteMessage] = useState<string | null>(null);
-  const [completeError, setCompleteError] = useState<string | null>(null);
-  const [markBusy, setMarkBusy] = useState(false);
-  const markingRef = useRef(false);
-  const outlineDtoRef = useRef<StaffCourseLessonOutlineDto | null>(null);
-
-  const load = useCallback(async () => {
-    if (!courseId || !lessonId) {
-      setState({ status: "error", message: "Missing course or lesson." });
-      return;
-    }
-    const session = getSession();
-    if (!session) {
-      setState({ status: "error", message: "No session. Sign in to continue." });
-      return;
-    }
-
-    setState({ status: "loading" });
-    setCompleteMessage(null);
-    setCompleteError(null);
-
-    const [courseRes, outlineRes, readingRes, progressRes, linksRes] = await Promise.all([
-      fetchCourse(session, courseId),
-      fetchCourseLessonOutline(session, courseId),
-      fetchLessonReading(session, courseId, lessonId),
-      fetchProgress(session, session.userId),
-      fetchLessonExternalLinks(session, courseId, lessonId)
-    ]);
-
-    if (!courseRes.ok) {
-      setState({ status: "error", message: courseRes.error.message });
-      return;
-    }
-    if (!outlineRes.ok) {
-      outlineDtoRef.current = null;
-      setState({ status: "error", message: outlineRes.error.message });
-      return;
-    }
-    outlineDtoRef.current = outlineRes.outline;
-    if (!progressRes.ok) {
-      setState({ status: "error", message: progressRes.error.message });
-      return;
-    }
-    if (!readingRes.ok) {
-      if (readingRes.error.status === 400) {
-        setState({
-          status: "error",
-          message:
-            "This lesson is not a reading lesson (for example, it may be video). Use the outline from the course page when playback is available."
-        });
-        return;
-      }
-      setState({ status: "error", message: readingRes.error.message });
-      return;
-    }
-    if (!linksRes.ok) {
-      setState({ status: "error", message: linksRes.error.message });
-      return;
-    }
-
-    const reading = readingRes.reading;
-    const { lessonOutlineModules, navigationModules } = mapOutlineForLearner(
-      outlineRes.outline,
-      courseId,
-      {
-        currentLessonId: lessonId,
-        progress: progressRes.progress
-      }
-    );
-
-    const row = progressRes.progress.find(
-      (p: ProgressDto) =>
-        p.courseId === courseId && p.scope === "LESSON" && p.lessonId === lessonId
-    );
-    const pct = row?.percent ?? 0;
-    setLessonPercent(pct);
-
-    setState({
-      status: "ready",
-      courseTitle: courseRes.course.title,
-      lessonTitle: reading.title,
-      html: reading.html,
-      lessonLinks: linksRes.links,
-      lessonOutlineModules,
-      navigationModules
-    });
-  }, [courseId, lessonId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const markComplete = useCallback(async (): Promise<boolean> => {
-    const session = getSession();
-    if (!session || !courseId || !lessonId) {
-      return false;
-    }
-    if (markingRef.current) {
-      return false;
-    }
-    markingRef.current = true;
-    setMarkBusy(true);
-    setCompleteError(null);
-    try {
-      const result = await putProgress(session, {
-        userId: session.userId,
-        courseId,
-        lessonId,
-        scope: "LESSON",
-        percent: 100
-      });
-      if (!result.ok) {
-        setCompleteError(result.error.message);
-        return false;
-      }
-      setLessonPercent(result.progress.percent);
-      setCompleteMessage("Lesson marked complete.");
-
-      const outlineDto = outlineDtoRef.current;
-      if (outlineDto) {
-        const progressRefresh = await fetchProgress(session, session.userId);
-        if (progressRefresh.ok) {
-          const { lessonOutlineModules, navigationModules } = mapOutlineForLearner(
-            outlineDto,
-            courseId,
-            { currentLessonId: lessonId, progress: progressRefresh.progress }
-          );
-          setState((s) =>
-            s.status === "ready" ? { ...s, lessonOutlineModules, navigationModules } : s
-          );
-        }
-      }
-      return true;
-    } finally {
-      markingRef.current = false;
-      setMarkBusy(false);
-    }
-  }, [courseId, lessonId]);
-
-  useEffect(() => {
-    if (state.status !== "ready") {
-      return;
-    }
-    if (lessonPercent >= 100) {
-      return;
-    }
-
-    const onScroll = (): void => {
-      if (lessonPercent >= 100 || markingRef.current) {
-        return;
-      }
-      const el = document.documentElement;
-      const scrollable = el.scrollHeight - el.clientHeight;
-      const ratio = scrollable <= 0 ? 1 : el.scrollTop / scrollable;
-      if (ratio >= READING_SCROLL_COMPLETE_RATIO) {
-        void markComplete();
-      }
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-    };
-  }, [state.status, lessonPercent, markComplete]);
+  const {
+    state,
+    lessonPercent,
+    completeMessage,
+    completeError,
+    markBusy,
+    setMixedVideosReady,
+    markComplete
+  } = useLearnerLessonPage(courseId, lessonId);
 
   const adjacent = useMemo(() => {
     if (state.status !== "ready") {
@@ -290,30 +59,36 @@ export default function LearnerReadingLessonPage(): ReactElement {
   }
 
   const lessonComplete = lessonPercent >= 100;
+  const resourcesPanel = (
+    <LessonResourcesPanel lessonLinks={state.lessonLinks} lessonGlossary={state.lessonGlossary} />
+  );
 
-  const sortedLessonLinks = sortLessonLinks(state.lessonLinks);
-  const resourcesPanel =
-    sortedLessonLinks.length === 0 ? undefined : (
-      <section aria-labelledby="lesson-resources-heading">
-        <h2 id="lesson-resources-heading" className={styles.resourcesHeading}>
-          Resources
-        </h2>
-        <ul className={styles.resourceList}>
-          {sortedLessonLinks.map((link) => (
-            <li key={link.id} className={styles.resourceItem}>
-              <div className={styles.resourceRow}>
-                <UiLink href={link.url} external variant="default">
-                  {link.title}
-                </UiLink>
-              </div>
-              {link.description ? (
-                <p className={styles.resourceDescription}>{link.description}</p>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </section>
+  const mainAriaLabel =
+    state.variant === "mixed" ? "Mixed lesson segments" : "Lesson reading";
+
+  const completionStatus = (() => {
+    if (lessonComplete) {
+      return (
+        <p className={styles.status} role="status">
+          You have completed this lesson.
+        </p>
+      );
+    }
+    if (state.variant === "mixed") {
+      return (
+        <p className={styles.status}>
+          Scroll through all segments. When the lesson includes video, each clip must reach the
+          watch threshold before completion is recorded automatically. You can also mark the lesson
+          complete manually.
+        </p>
+      );
+    }
+    return (
+      <p className={styles.status}>
+        Scroll through the lesson or use the button above to record completion.
+      </p>
     );
+  })();
 
   return (
     <LessonViewerLayout
@@ -340,20 +115,32 @@ export default function LearnerReadingLessonPage(): ReactElement {
           : null
       }
       resources={resourcesPanel}
-      mainAriaLabel="Lesson reading"
+      mainAriaLabel={mainAriaLabel}
     >
-      <LessonViewerReadingMeasure>
-        {state.html ? (
-          <div
-            className={styles.readingHtml}
-            dangerouslySetInnerHTML={{ __html: state.html }}
-          />
-        ) : (
-          <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-            No reading content has been published for this lesson yet.
-          </p>
-        )}
-      </LessonViewerReadingMeasure>
+      {state.variant === "reading" ? (
+        <LessonViewerReadingMeasure>
+          {state.html ? (
+            <div
+              className={styles.readingHtml}
+              dangerouslySetInnerHTML={{ __html: state.html }}
+            />
+          ) : (
+            <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
+              No reading content has been published for this lesson yet.
+            </p>
+          )}
+        </LessonViewerReadingMeasure>
+      ) : state.blocks.length === 0 ? (
+        <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
+          This mixed lesson does not have any segments yet.
+        </p>
+      ) : (
+        <MixedLessonSegments
+          key={lessonId}
+          blocks={state.blocks}
+          onAllVideoThresholdsMetChange={setMixedVideosReady}
+        />
+      )}
 
       <div className={styles.actions}>
         <Button
@@ -368,15 +155,7 @@ export default function LearnerReadingLessonPage(): ReactElement {
         >
           {lessonComplete ? "Completed" : "Mark as complete"}
         </Button>
-        {lessonComplete ? (
-          <p className={styles.status} role="status">
-            You have completed this lesson.
-          </p>
-        ) : (
-          <p className={styles.status}>
-            Scroll through the lesson or use the button above to record completion.
-          </p>
-        )}
+        {completionStatus}
       </div>
       {completeMessage ? (
         <p className={styles.status} role="status" aria-live="polite">
