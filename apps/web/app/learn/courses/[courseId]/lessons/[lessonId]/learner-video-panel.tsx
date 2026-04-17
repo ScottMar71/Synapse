@@ -149,6 +149,7 @@ export function LearnerVideoPanel({
         preload="metadata"
         progressThrottleMs={400}
         watchedThreshold={0.8}
+        unavailableMessage="This video could not be played. It may be missing, blocked, or in an unsupported format. You can try again or use “Mark as complete” if allowed."
         aria-label={`Video: ${lessonTitle}`}
         onProgress={onProgress}
         onPause={onPauseFlush}

@@ -91,6 +91,14 @@ export default function LearnerLessonPage(): ReactElement {
       );
     }
     if (state.variant === "video") {
+      if (!state.video) {
+        return (
+          <p className={styles.status}>
+            Video playback is not available for this lesson. You can still mark it complete below if
+            your instructor allows it.
+          </p>
+        );
+      }
       return (
         <p className={styles.status}>
           Watch most of the video to record completion automatically, or use the button below.
@@ -155,6 +163,16 @@ export default function LearnerLessonPage(): ReactElement {
         </LessonViewerReadingMeasure>
       ) : state.variant === "video" ? (
         (() => {
+          if (!state.video) {
+            return (
+              <div role="alert" className={styles.playbackUnavailable}>
+                <p className={styles.playbackUnavailableText}>
+                  {state.playbackUnavailableMessage ??
+                    "Video playback is not available for this lesson right now."}
+                </p>
+              </div>
+            );
+          }
           const session = getSession();
           return session ? (
             <LearnerVideoPanel
@@ -203,7 +221,7 @@ export default function LearnerLessonPage(): ReactElement {
         </Button>
         {completionStatus}
       </div>
-      {state.variant === "video" && state.resumeLoadWarning ? (
+      {state.variant === "video" && state.video && state.resumeLoadWarning ? (
         <p className={styles.status} role="status">
           {state.resumeLoadWarning}
         </p>

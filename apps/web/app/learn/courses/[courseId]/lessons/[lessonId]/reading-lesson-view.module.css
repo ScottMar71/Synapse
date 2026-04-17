@@ -224,6 +224,21 @@
   font-size: var(--font-size-body-small);
 }
 
+.playbackUnavailable {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface-muted);
+}
+
+.playbackUnavailableText {
+  margin: 0;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-primary);
+}
+
 .videoShell {
   max-width: 65ch;
   margin: 0 auto;
