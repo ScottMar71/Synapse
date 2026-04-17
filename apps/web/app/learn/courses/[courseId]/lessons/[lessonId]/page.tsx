@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   LessonExternalLinkDto,
+  LessonGlossaryEntryDto,
   ProgressDto,
   StaffCourseLessonOutlineDto
 } from "@conductor/contracts";
@@ -24,6 +25,7 @@ import {
   fetchCourse,
   fetchCourseLessonOutline,
   fetchLessonExternalLinks,
+  fetchLessonGlossaryEntries,
   fetchLessonReading,
   fetchProgress,
   putProgress
@@ -79,12 +81,23 @@ type LoadState =
       lessonTitle: string;
       html: string | null;
       lessonLinks: LessonExternalLinkDto[];
+      lessonGlossary: LessonGlossaryEntryDto[];
       lessonOutlineModules: ReturnType<typeof mapOutlineForLearner>["lessonOutlineModules"];
       navigationModules: ReturnType<typeof mapOutlineForLearner>["navigationModules"];
     };
 
 function sortLessonLinks(links: LessonExternalLinkDto[]): LessonExternalLinkDto[] {
   return [...links].sort((a, b) => {
+    if (a.sortOrder !== b.sortOrder) {
+      return a.sortOrder - b.sortOrder;
+    }
+    return a.id.localeCompare(b.id);
+  });
+}
+
+
+function sortGlossaryEntries(entries: LessonGlossaryEntryDto[]): LessonGlossaryEntryDto[] {
+  return [...entries].sort((a, b) => {
     if (a.sortOrder !== b.sortOrder) {
       return a.sortOrder - b.sortOrder;
     }
@@ -120,13 +133,15 @@ export default function LearnerReadingLessonPage(): ReactElement {
     setCompleteMessage(null);
     setCompleteError(null);
 
-    const [courseRes, outlineRes, readingRes, progressRes, linksRes] = await Promise.all([
-      fetchCourse(session, courseId),
-      fetchCourseLessonOutline(session, courseId),
-      fetchLessonReading(session, courseId, lessonId),
-      fetchProgress(session, session.userId),
-      fetchLessonExternalLinks(session, courseId, lessonId)
-    ]);
+    const [courseRes, outlineRes, readingRes, progressRes, linksRes, glossaryRes] =
+      await Promise.all([
+        fetchCourse(session, courseId),
+        fetchCourseLessonOutline(session, courseId),
+        fetchLessonReading(session, courseId, lessonId),
+        fetchProgress(session, session.userId),
+        fetchLessonExternalLinks(session, courseId, lessonId),
+        fetchLessonGlossaryEntries(session, courseId, lessonId)
+      ]);
 
     if (!courseRes.ok) {
       setState({ status: "error", message: courseRes.error.message });
@@ -159,6 +174,8 @@ export default function LearnerReadingLessonPage(): ReactElement {
       return;
     }
 
+    const lessonGlossary = glossaryRes.ok ? glossaryRes.entries : [];
+
     const reading = readingRes.reading;
     const { lessonOutlineModules, navigationModules } = mapOutlineForLearner(
       outlineRes.outline,
@@ -182,6 +199,7 @@ export default function LearnerReadingLessonPage(): ReactElement {
       lessonTitle: reading.title,
       html: reading.html,
       lessonLinks: linksRes.links,
+      lessonGlossary,
       lessonOutlineModules,
       navigationModules
     });
@@ -292,26 +310,44 @@ export default function LearnerReadingLessonPage(): ReactElement {
   const lessonComplete = lessonPercent >= 100;
 
   const sortedLessonLinks = sortLessonLinks(state.lessonLinks);
+  const sortedGlossary = sortGlossaryEntries(state.lessonGlossary);
+  const hasResourceLinks = sortedLessonLinks.length > 0;
+  const hasGlossary = sortedGlossary.length > 0;
   const resourcesPanel =
-    sortedLessonLinks.length === 0 ? undefined : (
+    !hasResourceLinks && !hasGlossary ? undefined : (
       <section aria-labelledby="lesson-resources-heading">
         <h2 id="lesson-resources-heading" className={styles.resourcesHeading}>
           Resources
         </h2>
-        <ul className={styles.resourceList}>
-          {sortedLessonLinks.map((link) => (
-            <li key={link.id} className={styles.resourceItem}>
-              <div className={styles.resourceRow}>
-                <UiLink href={link.url} external variant="default">
-                  {link.title}
-                </UiLink>
-              </div>
-              {link.description ? (
-                <p className={styles.resourceDescription}>{link.description}</p>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        {hasResourceLinks ? (
+          <ul className={styles.resourceList}>
+            {sortedLessonLinks.map((link) => (
+              <li key={link.id} className={styles.resourceItem}>
+                <div className={styles.resourceRow}>
+                  <UiLink href={link.url} external variant="default">
+                    {link.title}
+                  </UiLink>
+                </div>
+                {link.description ? (
+                  <p className={styles.resourceDescription}>{link.description}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {hasGlossary ? (
+          <div className={hasResourceLinks ? styles.glossaryAfterLinks : undefined}>
+            <h3 className={styles.glossarySectionHeading}>Glossary</h3>
+            <dl className={styles.glossaryList}>
+              {sortedGlossary.map((entry) => (
+                <div key={entry.id} className={styles.glossaryItem}>
+                  <dt className={styles.glossaryTerm}>{entry.term}</dt>
+                  <dd className={styles.glossaryDefinition}>{entry.definition}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ) : null}
       </section>
     );
 
