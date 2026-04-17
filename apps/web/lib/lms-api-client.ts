@@ -16,9 +16,13 @@ import type {
   LessonMixedBlockLearner,
   LessonMixedBlockPutItem,
   LessonPatchBody,
+  LessonPlaybackDto,
   LessonReadingDto,
   LessonReadingPatchBody,
   LessonStaffDto,
+  LessonWatchCompletionResult,
+  LessonWatchStateDto,
+  LessonWatchStatePatchBody,
   ProgressDto,
   ProgressPutBody,
   ProgressReportRowDto,
@@ -161,6 +165,60 @@ export async function fetchLessonReading(
     return parsed;
   }
   return { ok: true, reading: parsed.data.data.reading };
+}
+
+export async function fetchLessonPlayback(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; playback: LessonPlaybackDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/playback`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ playback: LessonPlaybackDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, playback: parsed.data.data.playback };
+}
+
+export async function fetchLessonWatchState(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; watchState: LessonWatchStateDto | null } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/watch-state`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ watchState: LessonWatchStateDto | null }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, watchState: parsed.data.data.watchState };
+}
+
+export async function patchLessonWatchState(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  body: LessonWatchStatePatchBody
+): Promise<
+  | { ok: true; watchState: LessonWatchStateDto; completion: LessonWatchCompletionResult }
+  | { ok: false; error: ApiError }
+> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/watch-state`,
+    { method: "PATCH", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<
+    DataEnvelope<{ watchState: LessonWatchStateDto; completion: LessonWatchCompletionResult }>
+  >(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, watchState: parsed.data.data.watchState, completion: parsed.data.data.completion };
 }
 
 export async function patchLessonReadingForStaff(

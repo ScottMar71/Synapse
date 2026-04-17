@@ -30,6 +30,7 @@ import {
   lessonMixedBlocksDataSchema,
   lessonMixedBlocksPutBodySchema,
   lessonPatchBodySchema,
+  lessonPlaybackDtoSchema,
   lessonReadingDtoSchema,
   lessonReadingPatchBodySchema,
   lessonStaffDtoSchema,
@@ -57,6 +58,7 @@ import {
   getActiveMembershipRoles,
   getLessonFileDownloadForViewer,
   getLessonBlocksForViewer,
+  getLessonPlaybackForViewer,
   getLessonReadingForViewer,
   getLessonWatchStateForViewer,
   initLessonFileUploadForStaff,
@@ -184,6 +186,7 @@ type DataAccess = {
   listCourseLessonOutlineForViewer: typeof listCourseLessonOutlineForViewer;
   patchLessonForStaff: typeof patchLessonForStaff;
   getLessonReadingForViewer: typeof getLessonReadingForViewer;
+  getLessonPlaybackForViewer: typeof getLessonPlaybackForViewer;
   patchLessonReadingForStaff: typeof patchLessonReadingForStaff;
   getLessonBlocksForViewer: typeof getLessonBlocksForViewer;
   replaceLessonBlocksForStaff: typeof replaceLessonBlocksForStaff;
@@ -268,6 +271,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     listCourseLessonOutlineForViewer,
     patchLessonForStaff,
     getLessonReadingForViewer,
+    getLessonPlaybackForViewer,
     patchLessonReadingForStaff,
     getLessonBlocksForViewer,
     replaceLessonBlocksForStaff,
@@ -636,6 +640,51 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       resource: { courseId, lessonId }
     });
     return c.json({ data: { reading: result.reading } }, 200);
+  });
+
+  const getLessonPlaybackRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/playback`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description:
+          "Lesson playback payload (reading HTML, primary video asset, or mixed blocks). Staff may preview; learners need enrollment.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ playback: lessonPlaybackDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(getLessonPlaybackRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.getLessonPlaybackForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_PLAYBACK_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+    return c.json({ data: { playback: result.playback } }, 200);
   });
 
   const patchLessonReadingRoute = createRoute({

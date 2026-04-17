@@ -942,6 +942,77 @@ describe("lesson reading endpoints", () => {
   });
 });
 
+describe("lesson playback endpoint", () => {
+  const playbackPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/playback`;
+
+  it("returns playback when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async getLessonPlaybackForViewer() {
+          return {
+            ok: true,
+            playback: {
+              lesson: {
+                id: "lesson-1",
+                title: "Intro video",
+                contentKind: "VIDEO" as const,
+                readingContent: null
+              },
+              video: {
+                src: "https://example.com/video.mp4",
+                poster: null,
+                captions: []
+              }
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(playbackPath, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { playback: { lesson: { title: string }; video: { src: string } | null } };
+    };
+    expect(body.data.playback.lesson.title).toBe("Intro video");
+    expect(body.data.playback.video?.src).toBe("https://example.com/video.mp4");
+  });
+
+  it("denies cross-tenant playback GET without calling data access", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async getLessonPlaybackForViewer() {
+          throw new Error("getLessonPlaybackForViewer should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/playback`,
+      { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(403);
+  });
+});
+
 describe("lesson watch state endpoints", () => {
   const watchPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/watch-state`;
 

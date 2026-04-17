@@ -6,6 +6,20 @@ function lessonPath(courseId: string, lessonId: string): string {
   return `/learn/courses/${courseId}/lessons/${lessonId}`;
 }
 
+/** Resolves outline metadata for a lesson id, if it exists in the course outline. */
+export function findOutlineLesson(
+  outline: StaffCourseLessonOutlineDto,
+  lessonId: string
+): StaffCourseLessonOutlineDto["modules"][number]["lessons"][number] | null {
+  for (const mod of outline.modules) {
+    const hit = mod.lessons.find((l) => l.id === lessonId);
+    if (hit) {
+      return hit;
+    }
+  }
+  return null;
+}
+
 export function mapOutlineForLearner(
   outline: StaffCourseLessonOutlineDto,
   courseId: string,
