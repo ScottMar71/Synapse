@@ -34,8 +34,8 @@ export default async function AdminCoursePage({ params }: AdminCoursePageProps):
           <span className={styles.staffTag}>Staff</span>
         </h1>
         <p style={{ margin: 0, color: "var(--color-text-muted)", maxWidth: "52ch" }}>
-          Course metadata, categories, and publish state are saved to the tenant-scoped API. Instructor and admin
-          roles can load and edit; access is enforced on every request.
+          Course metadata, categories, publish state, and reading-lesson HTML are saved to the tenant-scoped API.
+          Instructor and admin roles can load and edit; access is enforced on every request.
         </p>
         <p style={{ margin: "var(--space-3) 0 0", fontSize: "0.875rem" }}>
           <Link href={`/admin/courses/${courseId}/player-wireframe`}>Preview course player layout (demo content)</Link>

@@ -7,12 +7,15 @@ import type {
   CoursePatchBody,
   EnrollmentDto,
   LearnerProvisionBody,
+  LessonReadingDto,
+  LessonReadingPatchBody,
   ProgressDto,
   ProgressPutBody,
   ProgressReportRowDto,
   ProgressReportRowsQuery,
   ProgressReportSharedQuery,
   ProgressReportSummaryDto,
+  StaffCourseLessonOutlineDto,
   SubmissionDto
 } from "@conductor/contracts";
 
@@ -31,6 +34,9 @@ export function formatTenantAdminError(error: ApiError): string {
   }
   if (error.status === 404) {
     return "The requested item was not found for this tenant.";
+  }
+  if (error.status === 409) {
+    return "This content was changed in another tab or session. Reload the page and try again.";
   }
   return error.message;
 }
@@ -106,6 +112,54 @@ export async function patchCourse(
     return parsed;
   }
   return { ok: true, course: parsed.data.data.course };
+}
+
+export async function fetchStaffCourseLessonOutline(
+  session: LmsApiSession,
+  courseId: string
+): Promise<{ ok: true; outline: StaffCourseLessonOutlineDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lesson-outline`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ outline: StaffCourseLessonOutlineDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, outline: parsed.data.data.outline };
+}
+
+export async function fetchLessonReading(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: true; reading: LessonReadingDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/reading`,
+    { headers: authHeaders(session) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ reading: LessonReadingDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, reading: parsed.data.data.reading };
+}
+
+export async function patchLessonReadingForStaff(
+  session: LmsApiSession,
+  courseId: string,
+  lessonId: string,
+  body: LessonReadingPatchBody
+): Promise<{ ok: true; reading: LessonReadingDto } | { ok: false; error: ApiError }> {
+  const response = await fetch(
+    `/api/v1/tenants/${encodeURIComponent(session.tenantId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/reading`,
+    { method: "PATCH", headers: authHeaders(session, true), body: JSON.stringify(body) }
+  );
+  const parsed = await parseResponse<DataEnvelope<{ reading: LessonReadingDto }>>(response);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, reading: parsed.data.data.reading };
 }
 
 export async function fetchEnrollments(

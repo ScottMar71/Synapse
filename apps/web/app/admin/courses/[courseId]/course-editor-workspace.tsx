@@ -22,6 +22,7 @@ import { DocumentUploadBlock } from "./document-upload-block";
 import { ImageUploadBlock } from "./image-upload-block";
 import { LearningTimeAssistant } from "./learning-time-assistant";
 import { CourseEditorSummary } from "./course-editor-summary";
+import { ReadingLessonEditor } from "./reading-lesson-editor";
 import { ScormUploadBlock } from "./scorm-upload-block";
 import styles from "./course-wireframe.module.css";
 
@@ -220,6 +221,7 @@ export function CourseEditorWorkspace({ courseId }: CourseEditorWorkspaceProps):
 
         <ScormUploadBlock />
         <CourseEditorSummary value={courseSummary} onChange={setCourseSummary} />
+        {session ? <ReadingLessonEditor session={session} courseId={courseId} /> : null}
       </div>
 
       <aside style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
