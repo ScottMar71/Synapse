@@ -1,12 +1,11 @@
 "use client";
 
-import { LessonViewerReadingMeasure } from "@conductor/ui";
 import type { ReactElement } from "react";
 
+import { LearnerLessonReadingStage } from "./learner-lesson-reading-stage";
 import { LearnerLessonVideoStage } from "./learner-lesson-video-stage";
 import { MixedLessonSegments } from "./mixed-lesson-segments";
 import type { ReadyMixed, ReadyReading, ReadyVideo } from "./learner-lesson-types";
-import styles from "./reading-lesson-view.module.css";
 
 export type ReadyLessonState = ReadyReading | ReadyMixed | ReadyVideo;
 
@@ -26,17 +25,7 @@ export function LearnerLessonMainStage({
   refreshOutlineProgress: () => Promise<void>;
 }): ReactElement {
   if (state.variant === "reading") {
-    return (
-      <LessonViewerReadingMeasure>
-        {state.html ? (
-          <div className={styles.readingHtml} dangerouslySetInnerHTML={{ __html: state.html }} />
-        ) : (
-          <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-            No reading content has been published for this lesson yet.
-          </p>
-        )}
-      </LessonViewerReadingMeasure>
-    );
+    return <LearnerLessonReadingStage html={state.html} />;
   }
 
   if (state.variant === "video") {
