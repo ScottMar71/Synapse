@@ -24,6 +24,10 @@ flowchart LR
 5. `packages/database` owns Prisma schema/client setup and centralizes database access.
 6. `packages/contracts` owns shared API and environment contracts used by web and api.
 
+## Lesson modalities (video v1 — planned)
+
+- Spike recorded as `.memory/decisions.md` **012**. Storage: `Lesson.contentKind`, `Lesson.videoAsset` (JSON), `Lesson.content` for reading HTML (sanitized). Planned `lesson_watch_state` for resume; completion via `Progress` (`LESSON`, `percent`). Watch DTO sketches: `lessonWatchStateDtoSchema` / `lessonWatchStatePatchBodySchema` in `packages/contracts/src/lms-api.ts`.
+
 ## Repo Profile
 
 - Package scope: `@conductor`
