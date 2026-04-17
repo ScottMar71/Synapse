@@ -1348,6 +1348,128 @@ describe("lesson file endpoints", () => {
     );
     expect(response.status).toBe(403);
   });
+
+  it("denies collection PATCH reorder for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async reorderLessonFileAttachmentsForStaff() {
+          throw new Error("reorderLessonFileAttachmentsForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(filesBase, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ orderedAttachmentIds: ["file-1"] })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff collection PATCH reorder when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async reorderLessonFileAttachmentsForStaff() {
+          return { ok: true, attachments: [sampleAttachment] };
+        }
+      }
+    });
+
+    const response = await app.request(filesBase, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ orderedAttachmentIds: ["file-1"] })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { attachments: { id: string }[] } };
+    expect(body.data.attachments).toHaveLength(1);
+    expect(body.data.attachments[0]?.id).toBe("file-1");
+  });
+
+  it("denies file PATCH metadata for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async patchLessonFileAttachmentForStaff() {
+          throw new Error("patchLessonFileAttachmentForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(`${filesBase}/file-1`, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ fileName: "x.pdf" })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff file PATCH when data access succeeds", async () => {
+    const updated = { ...sampleAttachment, fileName: "renamed.pdf" };
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["ADMIN"];
+        }
+      },
+      dataAccess: {
+        async patchLessonFileAttachmentForStaff() {
+          return { ok: true, attachment: updated };
+        }
+      }
+    });
+
+    const response = await app.request(`${filesBase}/file-1`, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ fileName: "renamed.pdf" })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { attachment: { fileName: string } } };
+    expect(body.data.attachment.fileName).toBe("renamed.pdf");
+  });
+
+  it("allows staff file DELETE when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async archiveLessonFileAttachmentForStaff() {
+          return { ok: true, archived: true as const };
+        }
+      }
+    });
+
+    const response = await app.request(`${filesBase}/file-1`, {
+      method: "DELETE",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { archived: boolean } };
+    expect(body.data.archived).toBe(true);
+  });
 });
 
 describe("observability", () => {

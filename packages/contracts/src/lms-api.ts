@@ -368,6 +368,23 @@ export const lessonFileDownloadDtoSchema = z
   })
   .openapi("LessonFileDownload");
 
+export const lessonFileReorderBodySchema = z
+  .object({
+    orderedAttachmentIds: z.array(z.string().min(1)).min(1)
+  })
+  .openapi("LessonFileReorderBody");
+
+export const lessonFilePatchBodySchema = z
+  .object({
+    fileName: z.string().min(1).max(255).optional(),
+    description: z.string().max(2000).nullable().optional()
+  })
+  .refine(
+    (body) => body.fileName !== undefined || body.description !== undefined,
+    { message: "At least one field is required" }
+  )
+  .openapi("LessonFilePatchBody");
+
 export const learnerSummarySchema = z
   .object({
     id: z.string(),
@@ -466,5 +483,7 @@ export type LessonFileAttachmentDto = z.infer<typeof lessonFileAttachmentDtoSche
 export type LessonFileUploadInitBody = z.infer<typeof lessonFileUploadInitBodySchema>;
 export type LessonFileUploadInstruction = z.infer<typeof lessonFileUploadInstructionSchema>;
 export type LessonFileDownloadDto = z.infer<typeof lessonFileDownloadDtoSchema>;
+export type LessonFileReorderBody = z.infer<typeof lessonFileReorderBodySchema>;
+export type LessonFilePatchBody = z.infer<typeof lessonFilePatchBodySchema>;
 export type LearnerSummaryDto = z.infer<typeof learnerSummarySchema>;
 export type LearnerProvisionBody = z.infer<typeof learnerProvisionBodySchema>;

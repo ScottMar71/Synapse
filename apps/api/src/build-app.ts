@@ -14,6 +14,8 @@ import {
   learnerSummarySchema,
   lessonFileAttachmentDtoSchema,
   lessonFileDownloadDtoSchema,
+  lessonFilePatchBodySchema,
+  lessonFileReorderBodySchema,
   lessonFileUploadInitBodySchema,
   lessonFileUploadInstructionSchema,
   lessonGlossaryCreateBodySchema,
@@ -28,21 +30,37 @@ import {
   progressReportRowsQuerySchema,
   progressReportSharedQuerySchema,
   progressReportSummaryDtoSchema,
+  SCORM_PACKAGE_MAX_ZIP_BYTES,
+  scormPackageUploadInitBodySchema,
+  scormPackageUploadInstructionSchema,
+  scormRuntimeQuerySchema,
+  scormSessionDtoSchema,
+  scormSessionPatchBodySchema,
   staffCourseLessonOutlineDtoSchema,
+  lessonScormPackageDtoSchema,
+  lessonScormPlaybackSchema,
   submissionDtoSchema,
   z
 } from "@conductor/contracts";
 import {
   archiveCourseCategory,
+  archiveLessonFileAttachmentForStaff,
   archiveLessonGlossaryEntryForStaff,
+  beginScormPackageProcessingForStaff,
   createCourseCategory,
   createEnrollment,
+  failScormPackageProcessingForStaff,
+  finalizeScormPackageProcessingForStaff,
   getCourseForViewer,
   createLessonGlossaryEntry,
   getActiveMembershipRoles,
   getLessonFileDownloadForViewer,
   getLessonReadingForViewer,
+  getScormPackageForViewer,
+  getScormRuntimeObjectForViewer,
+  getScormSessionForViewer,
   initLessonFileUploadForStaff,
+  initScormPackageUploadForStaff,
   listCourseCategoriesForTenant,
   listCoursesForTenant,
   listCoursesInCategory,
@@ -53,12 +71,15 @@ import {
   listLessonFileAttachmentsForViewer,
   listLessonGlossaryEntriesForViewer,
   MAX_LESSON_FILE_BYTES,
+  patchLessonFileAttachmentForStaff,
   patchLessonGlossaryEntryForStaff,
+  patchScormSessionForViewer,
   listProgressForUser,
   listPublishedCoursesForTenant,
   patchLessonReadingForStaff,
   provisionLearnerForTenant,
   removeCourseFromCategory,
+  reorderLessonFileAttachmentsForStaff,
   setCourseCategoryLinks,
   submitAssessmentAttempt,
   updateCourse,
@@ -83,6 +104,10 @@ import { AUDIT_ACTIONS } from "./observability/audit-actions";
 import { emitAuditEvent } from "./observability/audit";
 import { getMetricsSnapshot } from "./observability/metrics";
 import { createObservabilityMiddleware } from "./observability/middleware";
+import { getObjectBytes } from "./object-storage-binary";
+import { ScormZipError, prepareScormZipWorkset } from "./scorm/analyze-zip";
+import { scormRuntimeJwtSecret, signScormRuntimeJwt, verifyScormRuntimeJwt } from "./scorm/runtime-jwt";
+import { uploadScormExtractToStorage } from "./scorm/upload-extracted";
 
 import { Buffer } from "node:buffer";
 
@@ -167,8 +192,19 @@ type DataAccess = {
   initLessonFileUploadForStaff: typeof initLessonFileUploadForStaff;
   listLessonFileAttachmentsForViewer: typeof listLessonFileAttachmentsForViewer;
   getLessonFileDownloadForViewer: typeof getLessonFileDownloadForViewer;
+  reorderLessonFileAttachmentsForStaff: typeof reorderLessonFileAttachmentsForStaff;
+  patchLessonFileAttachmentForStaff: typeof patchLessonFileAttachmentForStaff;
+  archiveLessonFileAttachmentForStaff: typeof archiveLessonFileAttachmentForStaff;
   getProgressReportSummary: typeof getProgressReportSummary;
   listProgressReportRows: typeof listProgressReportRows;
+  initScormPackageUploadForStaff: typeof initScormPackageUploadForStaff;
+  beginScormPackageProcessingForStaff: typeof beginScormPackageProcessingForStaff;
+  finalizeScormPackageProcessingForStaff: typeof finalizeScormPackageProcessingForStaff;
+  failScormPackageProcessingForStaff: typeof failScormPackageProcessingForStaff;
+  getScormPackageForViewer: typeof getScormPackageForViewer;
+  getScormRuntimeObjectForViewer: typeof getScormRuntimeObjectForViewer;
+  getScormSessionForViewer: typeof getScormSessionForViewer;
+  patchScormSessionForViewer: typeof patchScormSessionForViewer;
 };
 
 type AppDependencies = {
@@ -239,10 +275,21 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     initLessonFileUploadForStaff,
     listLessonFileAttachmentsForViewer,
     getLessonFileDownloadForViewer,
+    reorderLessonFileAttachmentsForStaff,
+    patchLessonFileAttachmentForStaff,
+    archiveLessonFileAttachmentForStaff,
     getProgressReportSummary,
     listProgressReportRows,
+    initScormPackageUploadForStaff,
+    beginScormPackageProcessingForStaff,
+    finalizeScormPackageProcessingForStaff,
+    failScormPackageProcessingForStaff,
+    getScormPackageForViewer,
+    getScormRuntimeObjectForViewer,
+    getScormSessionForViewer,
+    patchScormSessionForViewer,
     ...dependencies.dataAccess
-  };
+  } as DataAccess;
 
   const resolvedDependencies = {
     adapters: dependencies.adapters ?? createNoopPlatformAdapters(),
@@ -260,20 +307,37 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
   async function authorizeRequest(
     context: Context,
     tenantId: string,
-    requiredRoles?: MembershipRole[]
+    requiredRoles?: MembershipRole[],
+    opts?: { scormRuntimeLesson?: { courseId: string; lessonId: string } }
   ): Promise<
     | { ok: true; session: { userId: string; tenantId: string }; roles: MembershipRole[] }
     | { ok: false; response: Response }
   > {
     const token = parseBearerToken(context.req.header("authorization"));
     const result = await authorizer.authorize({ token, requestTenantId: tenantId, requiredRoles });
-    if (!result.ok) {
-      return {
-        ok: false,
-        response: context.json({ error: result.reason }, result.statusCode)
-      };
+    if (result.ok) {
+      return { ok: true, session: result.session, roles: result.roles };
     }
-    return { ok: true, session: result.session, roles: result.roles };
+    if (opts?.scormRuntimeLesson && scormRuntimeJwtSecret()) {
+      const rawToken = context.req.query("access_token");
+      const payload = verifyScormRuntimeJwt(typeof rawToken === "string" ? rawToken : undefined);
+      if (
+        payload &&
+        payload.tid === tenantId &&
+        payload.cid === opts.scormRuntimeLesson.courseId &&
+        payload.lid === opts.scormRuntimeLesson.lessonId
+      ) {
+        return {
+          ok: true,
+          session: { userId: payload.sub, tenantId: payload.tid },
+          roles: ["LEARNER"]
+        };
+      }
+    }
+    return {
+      ok: false,
+      response: context.json({ error: result.reason }, result.statusCode)
+    };
   }
 
   const app = new OpenAPIHono({
@@ -957,6 +1021,150 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       },
       201
     );
+  });
+
+  const patchLessonFilesReorderRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/files`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonFileReorderBodySchema } } }
+    },
+    responses: {
+      200: {
+        description: "Reordered lesson file attachments",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ attachments: z.array(lessonFileAttachmentDtoSchema) }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(patchLessonFilesReorderRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.reorderLessonFileAttachmentsForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles,
+      orderedAttachmentIds: body.orderedAttachmentIds
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_FILE_REORDER,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+    return c.json({ data: { attachments: result.attachments } }, 200);
+  });
+
+  const patchLessonFileAttachmentRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/files/{fileId}`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonFileParams,
+      body: { content: { "application/json": { schema: lessonFilePatchBodySchema } } }
+    },
+    responses: {
+      200: {
+        description: "Updated lesson file metadata",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ attachment: lessonFileAttachmentDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(patchLessonFileAttachmentRoute, async (c) => {
+    const { tenantId, courseId, lessonId, fileId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.patchLessonFileAttachmentForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      fileId,
+      roles: auth.roles,
+      patch: { fileName: body.fileName, description: body.description }
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_FILE_PATCH,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, fileId }
+    });
+    return c.json({ data: { attachment: result.attachment } }, 200);
+  });
+
+  const deleteLessonFileAttachmentRoute = createRoute({
+    method: "delete",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/files/{fileId}`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonFileParams },
+    responses: {
+      200: {
+        description: "Archived lesson file attachment",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ archived: z.literal(true) }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(deleteLessonFileAttachmentRoute, async (c) => {
+    const { tenantId, courseId, lessonId, fileId } = c.req.valid("param");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.archiveLessonFileAttachmentForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      fileId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_FILE_ARCHIVE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, fileId }
+    });
+    return c.json({ data: { archived: true as const } }, 200);
   });
 
   const getLessonFileDownloadRoute = createRoute({

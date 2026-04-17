@@ -1423,7 +1423,7 @@ function toLessonStaffDto(row: {
   };
 }
 
-async function assertStaffLessonInCourse(input: {
+export async function assertStaffLessonInCourse(input: {
   tenantId: string;
   courseId: string;
   lessonId: string;
