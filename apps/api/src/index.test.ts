@@ -714,8 +714,34 @@ describe("progress report endpoints", () => {
   });
 });
 
-describe("staff course lesson outline", () => {
-  it("returns outline when staff and data access succeeds", async () => {
+describe("course lesson outline", () => {
+  const outlineSuccessDataAccess = {
+    async listCourseLessonOutlineForViewer() {
+      return {
+        ok: true as const,
+        outline: {
+          modules: [
+            {
+              id: "mod-1",
+              title: "Module 1",
+              sortOrder: 0,
+              lessons: [
+                {
+                  id: "les-1",
+                  moduleId: "mod-1",
+                  title: "Lesson 1",
+                  sortOrder: 0,
+                  contentKind: "READING" as const
+                }
+              ]
+            }
+          ]
+        }
+      };
+    }
+  };
+
+  it("returns outline for staff when data access succeeds", async () => {
     const app = buildApp({
       adapters: noopAdapters(),
       membershipStore: {
@@ -723,31 +749,28 @@ describe("staff course lesson outline", () => {
           return ["INSTRUCTOR"];
         }
       },
-      dataAccess: {
-        async listCourseLessonOutlineForStaff() {
-          return {
-            ok: true,
-            outline: {
-              modules: [
-                {
-                  id: "mod-1",
-                  title: "Module 1",
-                  sortOrder: 0,
-                  lessons: [
-                    {
-                      id: "les-1",
-                      moduleId: "mod-1",
-                      title: "Lesson 1",
-                      sortOrder: 0,
-                      contentKind: "READING" as const
-                    }
-                  ]
-                }
-              ]
-            }
-          };
+      dataAccess: outlineSuccessDataAccess
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/courses/course-1/lesson-outline`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { outline: { modules: Array<{ lessons: Array<{ id: string }> }> } };
+    };
+    expect(body.data.outline.modules[0]?.lessons[0]?.id).toBe("les-1");
+  });
+
+  it("returns outline for enrolled learner when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
         }
-      }
+      },
+      dataAccess: outlineSuccessDataAccess
     });
 
     const response = await app.request(`/api/v1/tenants/${tenantA}/courses/course-1/lesson-outline`, {

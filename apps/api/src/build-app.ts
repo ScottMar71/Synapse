@@ -49,6 +49,7 @@ import {
   listEnrollmentsForUser,
   listLearnersForTenant,
   listCourseLessonOutlineForStaff,
+  listCourseLessonOutlineForViewer,
   listLessonFileAttachmentsForViewer,
   listLessonGlossaryEntriesForViewer,
   MAX_LESSON_FILE_BYTES,
@@ -156,6 +157,7 @@ type DataAccess = {
   removeCourseFromCategory: typeof removeCourseFromCategory;
   updateCourse: typeof updateCourse;
   listCourseLessonOutlineForStaff: typeof listCourseLessonOutlineForStaff;
+  listCourseLessonOutlineForViewer: typeof listCourseLessonOutlineForViewer;
   getLessonReadingForViewer: typeof getLessonReadingForViewer;
   patchLessonReadingForStaff: typeof patchLessonReadingForStaff;
   listLessonGlossaryEntriesForViewer: typeof listLessonGlossaryEntriesForViewer;
@@ -227,6 +229,7 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     removeCourseFromCategory,
     updateCourse,
     listCourseLessonOutlineForStaff,
+    listCourseLessonOutlineForViewer,
     getLessonReadingForViewer,
     patchLessonReadingForStaff,
     listLessonGlossaryEntriesForViewer,
@@ -470,14 +473,15 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     return c.json({ data: { course: result.course } }, 200);
   });
 
-  const getStaffCourseLessonOutlineRoute = createRoute({
+  const getCourseLessonOutlineRoute = createRoute({
     method: "get",
     path: `${base}/tenants/{tenantId}/courses/{courseId}/lesson-outline`,
     tags: [lmsApiTags.lessons],
     request: { params: tenantCourseParams },
     responses: {
       200: {
-        description: "Staff-only modules and lessons for authoring",
+        description:
+          "Course modules and lessons for navigation (enrolled learners; instructors and admins may preview without enrollment).",
         content: {
           "application/json": {
             schema: dataEnvelope(z.object({ outline: staffCourseLessonOutlineDtoSchema }))
@@ -499,16 +503,16 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     }
   });
 
-  app.openapi(getStaffCourseLessonOutlineRoute, async (c) => {
+  app.openapi(getCourseLessonOutlineRoute, async (c) => {
     const { tenantId, courseId } = c.req.valid("param");
-    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
-    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    const auth = await authorizeRequest(c, tenantId);
     if (!auth.ok) {
       return auth.response as never;
     }
-    const result = await resolvedDependencies.dataAccess.listCourseLessonOutlineForStaff({
+    const result = await resolvedDependencies.dataAccess.listCourseLessonOutlineForViewer({
       tenantId,
       courseId,
+      viewerUserId: auth.session.userId,
       roles: auth.roles
     });
     if (!result.ok) {

@@ -95,7 +95,7 @@
 
 - Date: 2026-04-17
 - Context: Staff need a lesson picker in the course editor; reading body and `updatedAt` belong on the reading DTO for optimistic concurrency (decision 011).
-- Decision: `GET .../lesson-outline` returns modules and lessons with **`id`, `moduleId`, `title`, `sortOrder`, `contentKind`** only. The admin reading editor loads HTML and version baseline via **`GET .../lessons/{lessonId}/reading`** when a READING lesson is selected.
+- Decision: `GET .../lesson-outline` returns modules and lessons with **`id`, `moduleId`, `title`, `sortOrder`, `contentKind`** only. **Enrolled learners** and **staff** may call it (staff skip enrollment); response shape is unchanged for admin. The admin reading editor loads HTML and version baseline via **`GET .../lessons/{lessonId}/reading`** when a READING lesson is selected.
 - Status: Active
 
 ### 014 - Lesson files: S3-compatible storage + presigned URLs
