@@ -114,7 +114,7 @@ export async function patchCourse(
   return { ok: true, course: parsed.data.data.course };
 }
 
-export async function fetchStaffCourseLessonOutline(
+export async function fetchCourseLessonOutline(
   session: LmsApiSession,
   courseId: string
 ): Promise<{ ok: true; outline: StaffCourseLessonOutlineDto } | { ok: false; error: ApiError }> {
@@ -127,6 +127,14 @@ export async function fetchStaffCourseLessonOutline(
     return parsed;
   }
   return { ok: true, outline: parsed.data.data.outline };
+}
+
+/** @deprecated Use `fetchCourseLessonOutline` — same endpoint serves staff and enrolled learners. */
+export async function fetchStaffCourseLessonOutline(
+  session: LmsApiSession,
+  courseId: string
+): Promise<{ ok: true; outline: StaffCourseLessonOutlineDto } | { ok: false; error: ApiError }> {
+  return fetchCourseLessonOutline(session, courseId);
 }
 
 export async function fetchLessonReading(

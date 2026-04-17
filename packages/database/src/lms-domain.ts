@@ -1423,7 +1423,7 @@ function toLessonStaffDto(row: {
   };
 }
 
-async function assertStaffLessonInCourse(input: {
+export async function assertStaffLessonInCourse(input: {
   tenantId: string;
   courseId: string;
   lessonId: string;
@@ -1698,26 +1698,20 @@ function lessonRowToReadingDto(
   };
 }
 
-export async function listCourseLessonOutlineForStaff(input: {
-  tenantId: string;
-  courseId: string;
-  roles: MembershipRoleName[];
-}): Promise<{ ok: true; outline: StaffCourseLessonOutline } | { ok: false; error: ServiceError }> {
-  const staff = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
-  if (!staff) {
-    return { ok: false, error: { code: "FORBIDDEN", message: "Lesson outline requires staff access" } };
-  }
-
+async function loadCourseLessonOutlineModules(
+  tenantId: string,
+  courseId: string
+): Promise<StaffCourseOutlineModule[] | null> {
   const course = await prisma.course.findFirst({
-    where: { id: input.courseId, tenantId: input.tenantId },
+    where: { id: courseId, tenantId },
     select: { id: true }
   });
   if (!course) {
-    return { ok: false, error: { code: "NOT_FOUND", message: "Course not found" } };
+    return null;
   }
 
   const modules = await prisma.module.findMany({
-    where: { tenantId: input.tenantId, courseId: input.courseId, archivedAt: null },
+    where: { tenantId, courseId, archivedAt: null },
     orderBy: { sortOrder: "asc" },
     select: {
       id: true,
@@ -1737,23 +1731,78 @@ export async function listCourseLessonOutlineForStaff(input: {
     }
   });
 
-  return {
-    ok: true,
-    outline: {
-      modules: modules.map((m) => ({
-        id: m.id,
-        title: m.title,
-        sortOrder: m.sortOrder,
-        lessons: m.lessons.map((l) => ({
-          id: l.id,
-          moduleId: l.moduleId,
-          title: l.title,
-          sortOrder: l.sortOrder,
-          contentKind: l.contentKind === "VIDEO" ? "VIDEO" : "READING"
-        }))
-      }))
+  return modules.map((m) => ({
+    id: m.id,
+    title: m.title,
+    sortOrder: m.sortOrder,
+    lessons: m.lessons.map((l) => ({
+      id: l.id,
+      moduleId: l.moduleId,
+      title: l.title,
+      sortOrder: l.sortOrder,
+      contentKind: l.contentKind === "VIDEO" ? "VIDEO" : "READING"
+    }))
+  }));
+}
+
+export async function listCourseLessonOutlineForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; outline: StaffCourseLessonOutline } | { ok: false; error: ServiceError }> {
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+
+  if (!isStaffUser) {
+    const courseAccess = await getCourseForViewer({
+      tenantId: input.tenantId,
+      courseId: input.courseId,
+      viewerUserId: input.viewerUserId,
+      roles: input.roles
+    });
+    if (!courseAccess.ok) {
+      return { ok: false, error: courseAccess.error };
     }
-  };
+
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const modules = await loadCourseLessonOutlineModules(input.tenantId, input.courseId);
+  if (!modules) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Course not found" } };
+  }
+
+  return { ok: true, outline: { modules } };
+}
+
+export async function listCourseLessonOutlineForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; outline: StaffCourseLessonOutline } | { ok: false; error: ServiceError }> {
+  const staff = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!staff) {
+    return { ok: false, error: { code: "FORBIDDEN", message: "Lesson outline requires staff access" } };
+  }
+
+  const modules = await loadCourseLessonOutlineModules(input.tenantId, input.courseId);
+  if (!modules) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Course not found" } };
+  }
+
+  return { ok: true, outline: { modules } };
 }
 
 export async function getLessonReadingForViewer(input: {
@@ -2494,4 +2543,201 @@ export async function getLessonFileDownloadForViewer(input: {
     attachment: mapLessonFileAttachment(row),
     storageKey: row.storageKey
   };
+}
+
+export async function reorderLessonFileAttachmentsForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+  orderedAttachmentIds: string[];
+}): Promise<{ ok: true; attachments: LessonFileAttachmentDto[] } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const rows = await prisma.lessonFileAttachment.findMany({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+    select: { id: true }
+  });
+  const existing = new Set(rows.map((r) => r.id));
+  if (input.orderedAttachmentIds.length !== existing.size) {
+    return {
+      ok: false,
+      error: {
+        code: "INVALID_INPUT",
+        message: "orderedAttachmentIds must list every attachment exactly once"
+      }
+    };
+  }
+  const seen = new Set<string>();
+  for (const id of input.orderedAttachmentIds) {
+    if (seen.has(id)) {
+      return {
+        ok: false,
+        error: { code: "INVALID_INPUT", message: "Duplicate attachment id in orderedAttachmentIds" }
+      };
+    }
+    seen.add(id);
+    if (!existing.has(id)) {
+      return {
+        ok: false,
+        error: { code: "INVALID_INPUT", message: "Unknown attachment id in orderedAttachmentIds" }
+      };
+    }
+  }
+
+  await prisma.$transaction(
+    input.orderedAttachmentIds.map((attachmentId, index) =>
+      prisma.lessonFileAttachment.update({
+        where: { id: attachmentId },
+        data: { sortOrder: index }
+      })
+    )
+  );
+
+  const listed = await prisma.lessonFileAttachment.findMany({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      sortOrder: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, attachments: listed.map(mapLessonFileAttachment) };
+}
+
+export async function patchLessonFileAttachmentForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  fileId: string;
+  roles: MembershipRoleName[];
+  patch: { fileName?: string; description?: string | null; sortOrder?: number };
+}): Promise<{ ok: true; attachment: LessonFileAttachmentDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const existing = await prisma.lessonFileAttachment.findFirst({
+    where: {
+      id: input.fileId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      archivedAt: null
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      sortOrder: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "File not found" } };
+  }
+
+  const data: {
+    fileName?: string;
+    description?: string | null;
+    sortOrder?: number;
+  } = {};
+  if (input.patch.fileName !== undefined) {
+    data.fileName = normalizeLessonAttachmentFileName(input.patch.fileName);
+  }
+  if (input.patch.description !== undefined) {
+    if (input.patch.description === null) {
+      data.description = null;
+    } else {
+      const d = input.patch.description.trim();
+      data.description = d.length > 2000 ? d.slice(0, 2000) : d.length > 0 ? d : null;
+    }
+  }
+  if (input.patch.sortOrder !== undefined) {
+    data.sortOrder = input.patch.sortOrder;
+  }
+
+  const updated = await prisma.lessonFileAttachment.update({
+    where: { id: input.fileId },
+    data,
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      sortOrder: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, attachment: mapLessonFileAttachment(updated) };
+}
+
+export async function archiveLessonFileAttachmentForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  fileId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; archived: true } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const row = await prisma.lessonFileAttachment.findFirst({
+    where: {
+      id: input.fileId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      archivedAt: null
+    },
+    select: { id: true }
+  });
+  if (!row) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "File not found" } };
+  }
+
+  await prisma.lessonFileAttachment.update({
+    where: { id: input.fileId },
+    data: { archivedAt: new Date() }
+  });
+
+  return { ok: true, archived: true };
 }

@@ -714,8 +714,34 @@ describe("progress report endpoints", () => {
   });
 });
 
-describe("staff course lesson outline", () => {
-  it("returns outline when staff and data access succeeds", async () => {
+describe("course lesson outline", () => {
+  const outlineSuccessDataAccess = {
+    async listCourseLessonOutlineForViewer() {
+      return {
+        ok: true as const,
+        outline: {
+          modules: [
+            {
+              id: "mod-1",
+              title: "Module 1",
+              sortOrder: 0,
+              lessons: [
+                {
+                  id: "les-1",
+                  moduleId: "mod-1",
+                  title: "Lesson 1",
+                  sortOrder: 0,
+                  contentKind: "READING" as const
+                }
+              ]
+            }
+          ]
+        }
+      };
+    }
+  };
+
+  it("returns outline for staff when data access succeeds", async () => {
     const app = buildApp({
       adapters: noopAdapters(),
       membershipStore: {
@@ -723,31 +749,28 @@ describe("staff course lesson outline", () => {
           return ["INSTRUCTOR"];
         }
       },
-      dataAccess: {
-        async listCourseLessonOutlineForStaff() {
-          return {
-            ok: true,
-            outline: {
-              modules: [
-                {
-                  id: "mod-1",
-                  title: "Module 1",
-                  sortOrder: 0,
-                  lessons: [
-                    {
-                      id: "les-1",
-                      moduleId: "mod-1",
-                      title: "Lesson 1",
-                      sortOrder: 0,
-                      contentKind: "READING" as const
-                    }
-                  ]
-                }
-              ]
-            }
-          };
+      dataAccess: outlineSuccessDataAccess
+    });
+
+    const response = await app.request(`/api/v1/tenants/${tenantA}/courses/course-1/lesson-outline`, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { outline: { modules: Array<{ lessons: Array<{ id: string }> }> } };
+    };
+    expect(body.data.outline.modules[0]?.lessons[0]?.id).toBe("les-1");
+  });
+
+  it("returns outline for enrolled learner when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
         }
-      }
+      },
+      dataAccess: outlineSuccessDataAccess
     });
 
     const response = await app.request(`/api/v1/tenants/${tenantA}/courses/course-1/lesson-outline`, {
@@ -1324,6 +1347,128 @@ describe("lesson file endpoints", () => {
       { headers: { authorization: "Bearer valid-token" } }
     );
     expect(response.status).toBe(403);
+  });
+
+  it("denies collection PATCH reorder for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async reorderLessonFileAttachmentsForStaff() {
+          throw new Error("reorderLessonFileAttachmentsForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(filesBase, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ orderedAttachmentIds: ["file-1"] })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff collection PATCH reorder when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async reorderLessonFileAttachmentsForStaff() {
+          return { ok: true, attachments: [sampleAttachment] };
+        }
+      }
+    });
+
+    const response = await app.request(filesBase, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ orderedAttachmentIds: ["file-1"] })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { attachments: { id: string }[] } };
+    expect(body.data.attachments).toHaveLength(1);
+    expect(body.data.attachments[0]?.id).toBe("file-1");
+  });
+
+  it("denies file PATCH metadata for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async patchLessonFileAttachmentForStaff() {
+          throw new Error("patchLessonFileAttachmentForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(`${filesBase}/file-1`, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ fileName: "x.pdf" })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff file PATCH when data access succeeds", async () => {
+    const updated = { ...sampleAttachment, fileName: "renamed.pdf" };
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["ADMIN"];
+        }
+      },
+      dataAccess: {
+        async patchLessonFileAttachmentForStaff() {
+          return { ok: true, attachment: updated };
+        }
+      }
+    });
+
+    const response = await app.request(`${filesBase}/file-1`, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ fileName: "renamed.pdf" })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { attachment: { fileName: string } } };
+    expect(body.data.attachment.fileName).toBe("renamed.pdf");
+  });
+
+  it("allows staff file DELETE when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async archiveLessonFileAttachmentForStaff() {
+          return { ok: true, archived: true as const };
+        }
+      }
+    });
+
+    const response = await app.request(`${filesBase}/file-1`, {
+      method: "DELETE",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { archived: boolean } };
+    expect(body.data.archived).toBe(true);
   });
 });
 

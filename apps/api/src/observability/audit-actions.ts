@@ -25,5 +25,8 @@ export const AUDIT_ACTIONS = {
   LESSON_GLOSSARY_ARCHIVE: "lesson.glossary_archive",
   LESSON_FILE_LIST_READ: "lesson.file_list_read",
   LESSON_FILE_UPLOAD_INIT: "lesson.file_upload_init",
-  LESSON_FILE_DOWNLOAD: "lesson.file_download"
+  LESSON_FILE_DOWNLOAD: "lesson.file_download",
+  LESSON_FILE_REORDER: "lesson.file_reorder",
+  LESSON_FILE_PATCH: "lesson.file_patch",
+  LESSON_FILE_ARCHIVE: "lesson.file_archive"
 } as const;

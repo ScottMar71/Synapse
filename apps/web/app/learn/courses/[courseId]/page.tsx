@@ -161,7 +161,7 @@ export default function LearnerCoursePage(): ReactElement {
         <p style={{ margin: "0 0 var(--space-6)", color: "var(--color-text-muted)" }}>{state.description}</p>
       ) : null}
 
-      <CourseOutline />
+      <CourseOutline courseId={courseId} />
 
       <CourseProgressPanel
         coursePercent={state.coursePercent}
