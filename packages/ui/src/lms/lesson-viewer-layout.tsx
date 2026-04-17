@@ -20,6 +20,11 @@ export type LessonViewerLayoutProps = {
     label: string;
     href: string;
   } | null;
+  /**
+   * Optional Resources region (for example external links). Renders above `<main>` on all breakpoints,
+   * below the mobile “next lesson” strip when present.
+   */
+  resources?: ReactNode;
   LinkComponent?: ComponentType<{ href: string; className?: string; children: ReactNode }>;
   /** `aria-label` on `<main>` when the page needs more than the heading for context. */
   mainAriaLabel?: string;
@@ -60,6 +65,7 @@ export function LessonViewerLayout({
   outlineLabel = "Course outline",
   children,
   nextLesson,
+  resources,
   LinkComponent,
   mainAriaLabel,
 }: LessonViewerLayoutProps): ReactElement {
@@ -87,6 +93,8 @@ export function LessonViewerLayout({
               </L>
             </div>
           ) : null}
+
+          {resources ? <div className={styles.resourcesSlot}>{resources}</div> : null}
 
           <main
             className={styles.mainLandmark}
