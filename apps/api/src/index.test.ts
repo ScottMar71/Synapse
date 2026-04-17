@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { sanitizeReadingHtml } from "@conductor/database";
 import type { AuthAdapter } from "@conductor/platform";
 import { createNoopPlatformAdapters, mergePlatformAdapters } from "@conductor/platform";
 
@@ -710,6 +711,290 @@ describe("progress report endpoints", () => {
       { headers: { authorization: "Bearer valid-token" } }
     );
     expect(response.status).toBe(400);
+  });
+});
+
+describe("lesson reading endpoints", () => {
+  const readingPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/reading`;
+
+  it("strips script tags from reading HTML via server allowlist", () => {
+    expect(sanitizeReadingHtml('<p class="x">a</p><script>alert(1)</script>')).toBe("<p>a</p>");
+  });
+
+  it("returns reading payload when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async getLessonReadingForViewer() {
+          return {
+            ok: true,
+            reading: {
+              lessonId: "lesson-1",
+              courseId: "course-1",
+              title: "Chapter 1",
+              html: "<p>Hello</p>"
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(readingPath, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { reading: { title: string; html: string | null } };
+    };
+    expect(body.data.reading.title).toBe("Chapter 1");
+    expect(body.data.reading.html).toBe("<p>Hello</p>");
+  });
+
+  it("denies lesson reading PATCH for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async patchLessonReadingForStaff() {
+          throw new Error("patchLessonReadingForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(readingPath, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ title: "Nope" })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff to PATCH lesson reading when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async patchLessonReadingForStaff() {
+          return {
+            ok: true,
+            reading: {
+              lessonId: "lesson-1",
+              courseId: "course-1",
+              title: "Updated",
+              html: null
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(readingPath, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ content: null })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { reading: { title: string } } };
+    expect(body.data.reading.title).toBe("Updated");
+  });
+
+  it("denies cross-tenant lesson reading without calling data access", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["ADMIN"];
+        }
+      },
+      dataAccess: {
+        async getLessonReadingForViewer() {
+          throw new Error("getLessonReadingForViewer should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/reading`,
+      { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("denies cross-tenant lesson reading PATCH without calling data access", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async patchLessonReadingForStaff() {
+          throw new Error("patchLessonReadingForStaff should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/reading`,
+      {
+        method: "PATCH",
+        headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+        body: JSON.stringify({ title: "X" })
+      }
+    );
+    expect(response.status).toBe(403);
+  });
+});
+
+describe("lesson glossary endpoints", () => {
+  const glossaryPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/glossary`;
+
+  it("returns glossary entries when data access succeeds for a learner", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listLessonGlossaryEntriesForViewer() {
+          return {
+            ok: true,
+            entries: [
+              {
+                id: "g1",
+                tenantId: tenantA,
+                lessonId: "lesson-1",
+                term: "API",
+                definition: "Application Programming Interface",
+                sortOrder: 0,
+                archivedAt: null,
+                createdAt: "2026-04-17T00:00:00.000Z",
+                updatedAt: "2026-04-17T00:00:00.000Z"
+              }
+            ]
+          };
+        }
+      }
+    });
+
+    const response = await app.request(glossaryPath, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { entries: { term: string }[] } };
+    expect(body.data.entries).toHaveLength(1);
+    expect(body.data.entries[0].term).toBe("API");
+  });
+
+  it("denies glossary POST for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async createLessonGlossaryEntry() {
+          throw new Error("createLessonGlossaryEntry should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(glossaryPath, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ term: "X", definition: "Y" })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff to POST glossary entry when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async createLessonGlossaryEntry() {
+          return {
+            ok: true,
+            entry: {
+              id: "new-g",
+              tenantId: tenantA,
+              lessonId: "lesson-1",
+              term: "Term",
+              definition: "Def",
+              sortOrder: 1,
+              archivedAt: null,
+              createdAt: "2026-04-17T00:00:00.000Z",
+              updatedAt: "2026-04-17T00:00:00.000Z"
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(glossaryPath, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ term: "Term", definition: "Def", sortOrder: 1 })
+    });
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { data: { entry: { id: string } } };
+    expect(body.data.entry.id).toBe("new-g");
+  });
+
+  it("does not call list glossary data access for cross-tenant requests", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listLessonGlossaryEntriesForViewer() {
+          throw new Error("listLessonGlossaryEntriesForViewer should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/glossary`,
+      { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(403);
   });
 });
 

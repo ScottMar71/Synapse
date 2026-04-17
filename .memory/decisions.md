@@ -76,3 +76,10 @@
 - Context: Admin categories, learners, and course metadata were API-backed but reused wireframe CSS, mixed loading/error patterns, and did not gate `/admin` at the edge; course `GET` can succeed for learners while staff editing requires a separate guard.
 - Decision: Extend Next middleware so `/admin` requires the same session cookies as other protected shells. Centralize sign-in / loading / retry / staff-forbidden states in `admin-page-states.tsx`, add `formatTenantAdminError` for consistent operator copy, and call `probeInstructorRoute` before loading the course editor. Retire static admin wireframe implementations; keep `*-wireframe` paths as redirects to production routes and move production styles to `admin-*-shell.module.css` where applicable.
 - Status: Active
+
+### 011 - Reading lesson HTML: server allowlist sanitization
+
+- Date: 2026-04-17
+- Context: Reading/article lessons store rich HTML in `Lesson.content` and must not execute attacker-controlled markup in the learner app.
+- Decision: Sanitize with **`sanitize-html`** using an explicit **tag/attribute/URL scheme allowlist** in `packages/database/src/reading-html.ts`. Run sanitization on **staff save** (`patchLessonReadingForStaff`) and again on **learner read** (`getLessonReadingForViewer`). Document the approach in file header comments; OpenAPI describes the reading endpoints under `Lessons`.
+- Status: Active

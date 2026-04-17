@@ -18,9 +18,11 @@
     "db:reset": "prisma migrate reset --schema prisma/schema.prisma --force"
   },
   "dependencies": {
-    "@prisma/client": "^6.6.0"
+    "@prisma/client": "^6.6.0",
+    "sanitize-html": "^2.13.0"
   },
   "devDependencies": {
+    "@types/sanitize-html": "^2.11.0",
     "prisma": "^6.6.0"
   }
 }

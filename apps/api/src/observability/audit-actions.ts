@@ -14,5 +14,11 @@ export const AUDIT_ACTIONS = {
   CATEGORY_WRITE: "category.write",
   COURSE_CATEGORY_LINKS_WRITE: "course.category_links_write",
   COURSE_UPDATE: "course.update",
-  REPORTS_PROGRESS_READ: "reports.progress_read"
+  REPORTS_PROGRESS_READ: "reports.progress_read",
+  LESSON_PLAYBACK_READ: "lesson.playback_read",
+  LESSON_PATCH: "lesson.patch",
+  LESSON_READING_READ: "lesson.reading_read",
+  LESSON_READING_PATCH: "lesson.reading_patch",
+  LESSON_GLOSSARY_LIST_READ: "lesson.glossary_list_read",
+  LESSON_GLOSSARY_CREATE: "lesson.glossary_create"
 } as const;

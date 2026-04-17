@@ -14,7 +14,8 @@ export const lmsApiTags = {
   enrollments: "Enrollments",
   progress: "Progress",
   assessments: "Assessments",
-  reports: "Reports"
+  reports: "Reports",
+  lessons: "Lessons"
 } as const;
 
 export const enrollmentStatusSchema = z.enum(["ACTIVE", "COMPLETED", "DROPPED"]);
@@ -144,6 +145,123 @@ export const progressPutBodySchema = z
   })
   .openapi("ProgressPutBody");
 
+/** Allows only `http:` / `https:` URLs (rejects `javascript:`, `data:`, etc.). */
+export function isSafeHttpUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw.trim());
+    const p = u.protocol.toLowerCase();
+    return p === "http:" || p === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export const lessonVideoHttpUrlSchema = z
+  .string()
+  .min(1)
+  .refine(isSafeHttpUrl, { message: "URL must use http or https" });
+
+export const lessonContentKindSchema = z.enum(["READING", "VIDEO"]).openapi("LessonContentKind");
+
+export const lessonVideoCaptionTrackSchema = z
+  .object({
+    src: lessonVideoHttpUrlSchema,
+    label: z.string().min(1).max(200),
+    srclang: z.string().min(1).max(35),
+    isDefault: z.boolean().optional()
+  })
+  .openapi("LessonVideoCaptionTrack");
+
+export const lessonVideoAssetSchema = z
+  .object({
+    sourceUrl: lessonVideoHttpUrlSchema,
+    posterUrl: lessonVideoHttpUrlSchema.nullable().optional(),
+    captions: z.array(lessonVideoCaptionTrackSchema).max(32).optional()
+  })
+  .openapi("LessonVideoAsset");
+
+export const lessonVideoPlaybackSchema = z
+  .object({
+    src: z.string(),
+    poster: z.string().nullable(),
+    captions: z.array(lessonVideoCaptionTrackSchema)
+  })
+  .openapi("LessonVideoPlayback");
+
+export const lessonPlaybackDtoSchema = z
+  .object({
+    lesson: z.object({
+      id: z.string(),
+      title: z.string(),
+      contentKind: lessonContentKindSchema,
+      readingContent: z.string().nullable()
+    }),
+    video: lessonVideoPlaybackSchema.nullable()
+  })
+  .openapi("LessonPlayback");
+
+export const lessonPatchBodySchema = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    content: z.string().max(500_000).nullable().optional(),
+    contentKind: lessonContentKindSchema.optional(),
+    videoAsset: lessonVideoAssetSchema.nullable().optional()
+  })
+  .openapi("LessonPatchBody");
+
+export const lessonStaffDtoSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    contentKind: lessonContentKindSchema,
+    content: z.string().nullable(),
+    videoAsset: lessonVideoAssetSchema.nullable()
+  })
+  .openapi("LessonStaff");
+
+/** Sanitized HTML for learner display (`sanitize-html` allowlist in `@conductor/database`). */
+export const lessonReadingDtoSchema = z
+  .object({
+    lessonId: z.string(),
+    courseId: z.string(),
+    title: z.string(),
+    html: z.string().nullable()
+  })
+  .openapi("LessonReading");
+
+export const lessonReadingPatchBodySchema = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    content: z.string().max(500_000).nullable().optional()
+  })
+  .refine(
+    (body) => body.title !== undefined || body.content !== undefined,
+    { message: "At least one field is required" }
+  )
+  .openapi("LessonReadingPatchBody");
+
+export const lessonGlossaryEntryDtoSchema = z
+  .object({
+    id: z.string(),
+    tenantId: z.string(),
+    lessonId: z.string(),
+    term: z.string(),
+    definition: z.string(),
+    sortOrder: z.number().int(),
+    archivedAt: isoDateTime.nullable(),
+    createdAt: isoDateTime,
+    updatedAt: isoDateTime
+  })
+  .openapi("LessonGlossaryEntry");
+
+export const lessonGlossaryCreateBodySchema = z
+  .object({
+    term: z.string().min(1).max(500),
+    definition: z.string().min(1).max(20_000),
+    sortOrder: z.number().int().optional()
+  })
+  .openapi("LessonGlossaryCreateBody");
+
 export const learnerSummarySchema = z
   .object({
     id: z.string(),
@@ -223,5 +341,16 @@ export type ProgressDto = z.infer<typeof progressDtoSchema>;
 export type SubmissionDto = z.infer<typeof submissionDtoSchema>;
 export type EnrollmentCreateBody = z.infer<typeof enrollmentCreateBodySchema>;
 export type ProgressPutBody = z.infer<typeof progressPutBodySchema>;
+export type LessonContentKind = z.infer<typeof lessonContentKindSchema>;
+export type LessonVideoCaptionTrackDto = z.infer<typeof lessonVideoCaptionTrackSchema>;
+export type LessonVideoAssetDto = z.infer<typeof lessonVideoAssetSchema>;
+export type LessonVideoPlaybackDto = z.infer<typeof lessonVideoPlaybackSchema>;
+export type LessonPlaybackDto = z.infer<typeof lessonPlaybackDtoSchema>;
+export type LessonPatchBody = z.infer<typeof lessonPatchBodySchema>;
+export type LessonStaffDto = z.infer<typeof lessonStaffDtoSchema>;
+export type LessonReadingDto = z.infer<typeof lessonReadingDtoSchema>;
+export type LessonReadingPatchBody = z.infer<typeof lessonReadingPatchBodySchema>;
+export type LessonGlossaryEntryDto = z.infer<typeof lessonGlossaryEntryDtoSchema>;
+export type LessonGlossaryCreateBody = z.infer<typeof lessonGlossaryCreateBodySchema>;
 export type LearnerSummaryDto = z.infer<typeof learnerSummarySchema>;
 export type LearnerProvisionBody = z.infer<typeof learnerProvisionBodySchema>;

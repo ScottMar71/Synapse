@@ -33,6 +33,11 @@ enum ProgressScope {
   COURSE
 }
 
+enum LessonContentKind {
+  READING
+  VIDEO
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -163,16 +168,18 @@ model Module {
 }
 
 model Lesson {
-  id          String      @id @default(cuid())
+  id          String            @id @default(cuid())
   tenantId    String
   moduleId    String
   title       String
   content     String?
-  sortOrder   Int         @default(0)
+  contentKind LessonContentKind @default(READING)
+  videoAsset  Json?
+  sortOrder   Int               @default(0)
   archivedAt  DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  module      Module      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  module      Module            @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   progress    Progress[]
 
   @@index([tenantId])
