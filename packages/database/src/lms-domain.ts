@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "./prisma";
+import { normalizeLessonLinkUrl } from "./lesson-link-url";
 import { READING_HTML_MAX_LENGTH, sanitizeReadingHtml } from "./reading-html";
 
 export type MembershipRoleName = "LEARNER" | "INSTRUCTOR" | "ADMIN";
@@ -1969,6 +1970,315 @@ export async function patchLessonReadingForStaff(input: {
   };
 }
 
+/** Matches PRD / design default for video lesson completion (80% watched). */
+export const DEFAULT_VIDEO_WATCH_COMPLETION_THRESHOLD = 0.8;
+
+export function computeEffectiveWatchedRatio(input: {
+  positionSec: number;
+  durationSec: number | null | undefined;
+  playedRatio?: number | null;
+}): number {
+  const dur = input.durationSec;
+  const fromTimeline =
+    dur != null && dur > 0 ? Math.min(1, input.positionSec / dur) : 0;
+  return Math.min(1, Math.max(fromTimeline, input.playedRatio ?? 0));
+}
+
+export type LessonWatchStateDto = {
+  id: string;
+  tenantId: string;
+  userId: string;
+  lessonId: string;
+  positionSec: number;
+  durationSec: number | null;
+  updatedAt: string;
+};
+
+export type LessonWatchCompletionResultDto = {
+  threshold: number;
+  effectiveWatchedRatio: number;
+  lessonCompleted: boolean;
+  completionAppliedThisRequest: boolean;
+  lessonProgress: ProgressDto | null;
+};
+
+function mapLessonWatchStateRow(row: {
+  id: string;
+  tenantId: string;
+  userId: string;
+  lessonId: string;
+  positionSec: number;
+  durationSec: number | null;
+  updatedAt: Date;
+}): LessonWatchStateDto {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    userId: row.userId,
+    lessonId: row.lessonId,
+    positionSec: row.positionSec,
+    durationSec: row.durationSec,
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+async function findLessonScopeProgress(
+  tenantId: string,
+  userId: string,
+  courseId: string,
+  lessonId: string
+) {
+  return prisma.progress.findFirst({
+    where: {
+      tenantId,
+      userId,
+      courseId,
+      lessonId,
+      scope: "LESSON",
+      archivedAt: null
+    }
+  });
+}
+
+function isLessonProgressComplete(row: {
+  percent: number;
+  completedAt: Date | null;
+}): boolean {
+  return row.completedAt != null || row.percent >= 100;
+}
+
+export async function getLessonWatchStateForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<
+  { ok: true; watchState: LessonWatchStateDto | null } | { ok: false; error: ServiceError }
+> {
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true, contentKind: true }
+  });
+
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  if (lesson.contentKind !== "VIDEO") {
+    return { ok: false, error: { code: "BAD_REQUEST", message: "Lesson is not a video lesson" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const row = await prisma.lessonWatchState.findUnique({
+    where: {
+      tenantId_userId_lessonId: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        lessonId: input.lessonId
+      }
+    }
+  });
+
+  return { ok: true, watchState: row ? mapLessonWatchStateRow(row) : null };
+}
+
+/**
+ * Persists watch position with **last-write-wins** semantics (no version field).
+ * When the effective watched ratio is at or above `completionThreshold` (default {@link DEFAULT_VIDEO_WATCH_COMPLETION_THRESHOLD}),
+ * attempts an idempotent lesson `Progress` upsert at 100% for enrolled learners.
+ */
+export async function patchLessonWatchStateForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+  patch: { positionSec: number; durationSec?: number; playedRatio?: number };
+  completionThreshold?: number;
+}): Promise<
+  | { ok: true; watchState: LessonWatchStateDto; completion: LessonWatchCompletionResultDto }
+  | { ok: false; error: ServiceError }
+> {
+  const threshold = input.completionThreshold ?? DEFAULT_VIDEO_WATCH_COMPLETION_THRESHOLD;
+  if (!(threshold > 0 && threshold <= 1)) {
+    return {
+      ok: false,
+      error: { code: "INVALID_INPUT", message: "completionThreshold must be between 0 and 1" }
+    };
+  }
+
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true, contentKind: true, moduleId: true }
+  });
+
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  if (lesson.contentKind !== "VIDEO") {
+    return { ok: false, error: { code: "BAD_REQUEST", message: "Lesson is not a video lesson" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const existingState = await prisma.lessonWatchState.findUnique({
+    where: {
+      tenantId_userId_lessonId: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        lessonId: input.lessonId
+      }
+    },
+    select: { durationSec: true }
+  });
+
+  const nextDuration =
+    input.patch.durationSec !== undefined
+      ? input.patch.durationSec
+      : (existingState?.durationSec ?? null);
+
+  let positionNext = input.patch.positionSec;
+  if (nextDuration !== null && nextDuration > 0 && positionNext > nextDuration) {
+    positionNext = nextDuration;
+  }
+
+  const row = await prisma.lessonWatchState.upsert({
+    where: {
+      tenantId_userId_lessonId: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        lessonId: input.lessonId
+      }
+    },
+    create: {
+      tenantId: input.tenantId,
+      userId: input.viewerUserId,
+      lessonId: input.lessonId,
+      positionSec: positionNext,
+      durationSec: nextDuration
+    },
+    update: {
+      positionSec: positionNext,
+      durationSec: nextDuration
+    }
+  });
+
+  const effectiveWatchedRatio = computeEffectiveWatchedRatio({
+    positionSec: positionNext,
+    durationSec: nextDuration,
+    playedRatio: input.patch.playedRatio
+  });
+
+  const progressBefore = await findLessonScopeProgress(
+    input.tenantId,
+    input.viewerUserId,
+    input.courseId,
+    input.lessonId
+  );
+  const wasComplete = progressBefore != null && isLessonProgressComplete(progressBefore);
+
+  let completionAppliedThisRequest = false;
+  if (effectiveWatchedRatio >= threshold && !wasComplete) {
+    const progressResult = await upsertProgressForUser({
+      tenantId: input.tenantId,
+      userId: input.viewerUserId,
+      body: {
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        scope: "LESSON",
+        moduleId: lesson.moduleId,
+        lessonId: input.lessonId,
+        percent: 100
+      }
+    });
+    completionAppliedThisRequest = progressResult.ok;
+  }
+
+  const progressAfterRow = await findLessonScopeProgress(
+    input.tenantId,
+    input.viewerUserId,
+    input.courseId,
+    input.lessonId
+  );
+  const lessonCompleted =
+    progressAfterRow != null && isLessonProgressComplete(progressAfterRow);
+
+  return {
+    ok: true,
+    watchState: mapLessonWatchStateRow(row),
+    completion: {
+      threshold,
+      effectiveWatchedRatio,
+      lessonCompleted,
+      completionAppliedThisRequest,
+      lessonProgress: progressAfterRow ? mapProgress(progressAfterRow) : null
+    }
+  };
+}
+
 export type LessonGlossaryEntryDto = {
   id: string;
   tenantId: string;
@@ -2240,6 +2550,322 @@ export async function archiveLessonGlossaryEntryForStaff(input: {
 
   await prisma.lessonGlossaryEntry.update({
     where: { id: input.entryId },
+    data: { archivedAt: new Date() }
+  });
+
+  return { ok: true, archived: true };
+}
+
+export type LessonExternalLinkDto = {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  title: string;
+  url: string;
+  description: string | null;
+  sortOrder: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function mapLessonExternalLink(row: {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  title: string;
+  url: string;
+  description: string | null;
+  sortOrder: number;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): LessonExternalLinkDto {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    lessonId: row.lessonId,
+    title: row.title,
+    url: row.url,
+    description: row.description,
+    sortOrder: row.sortOrder,
+    archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+export async function listLessonExternalLinksForViewer(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  viewerUserId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; links: LessonExternalLinkDto[] } | { ok: false; error: ServiceError }> {
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: input.lessonId,
+      tenantId: input.tenantId,
+      archivedAt: null,
+      module: { courseId: input.courseId, archivedAt: null }
+    },
+    select: { id: true }
+  });
+  if (!lesson) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "Lesson not found" } };
+  }
+
+  const courseAccess = await getCourseForViewer({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    viewerUserId: input.viewerUserId,
+    roles: input.roles
+  });
+  if (!courseAccess.ok) {
+    return { ok: false, error: courseAccess.error };
+  }
+
+  const isStaffUser = input.roles.includes("INSTRUCTOR") || input.roles.includes("ADMIN");
+  if (!isStaffUser) {
+    const enrolled = await prisma.enrollment.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.viewerUserId,
+        courseId: input.courseId,
+        archivedAt: null,
+        status: { not: "DROPPED" }
+      },
+      select: { id: true }
+    });
+    if (!enrolled) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "Enrollment required" } };
+    }
+  }
+
+  const rows = await prisma.lessonExternalLink.findMany({
+    where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      title: true,
+      url: true,
+      description: true,
+      sortOrder: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, links: rows.map(mapLessonExternalLink) };
+}
+
+export async function createLessonExternalLink(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  roles: MembershipRoleName[];
+  body: { title: string; url: string; description?: string | null; sortOrder?: number };
+}): Promise<{ ok: true; link: LessonExternalLinkDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const title = input.body.title.trim();
+  if (!title) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "Title cannot be empty" } };
+  }
+
+  const normalizedUrl = normalizeLessonLinkUrl(input.body.url);
+  if (!normalizedUrl.ok) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: normalizedUrl.message } };
+  }
+
+  let description: string | null;
+  if (input.body.description === undefined) {
+    description = null;
+  } else if (input.body.description === null) {
+    description = null;
+  } else {
+    const d = input.body.description.trim();
+    description = d.length ? d : null;
+  }
+
+  let sortOrder = input.body.sortOrder;
+  if (sortOrder === undefined) {
+    const agg = await prisma.lessonExternalLink.aggregate({
+      where: { tenantId: input.tenantId, lessonId: input.lessonId, archivedAt: null },
+      _max: { sortOrder: true }
+    });
+    sortOrder = (agg._max.sortOrder ?? -1) + 1;
+  }
+
+  const created = await prisma.lessonExternalLink.create({
+    data: {
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      title,
+      url: normalizedUrl.url,
+      description,
+      sortOrder
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      title: true,
+      url: true,
+      description: true,
+      sortOrder: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, link: mapLessonExternalLink(created) };
+}
+
+export async function patchLessonExternalLinkForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  linkId: string;
+  roles: MembershipRoleName[];
+  patch: { title?: string; url?: string; description?: string | null; sortOrder?: number };
+}): Promise<{ ok: true; link: LessonExternalLinkDto } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  if (
+    input.patch.title === undefined &&
+    input.patch.url === undefined &&
+    input.patch.description === undefined &&
+    input.patch.sortOrder === undefined
+  ) {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "No fields to update" } };
+  }
+
+  const existing = await prisma.lessonExternalLink.findFirst({
+    where: {
+      id: input.linkId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      archivedAt: null
+    },
+    select: {
+      title: true,
+      url: true,
+      description: true,
+      sortOrder: true
+    }
+  });
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "External link not found" } };
+  }
+
+  let nextTitle = existing.title;
+  if (input.patch.title !== undefined) {
+    const t = input.patch.title.trim();
+    if (!t) {
+      return { ok: false, error: { code: "INVALID_INPUT", message: "Title cannot be empty" } };
+    }
+    nextTitle = t;
+  }
+
+  let nextUrl = existing.url;
+  if (input.patch.url !== undefined) {
+    const normalizedUrl = normalizeLessonLinkUrl(input.patch.url);
+    if (!normalizedUrl.ok) {
+      return { ok: false, error: { code: "INVALID_INPUT", message: normalizedUrl.message } };
+    }
+    nextUrl = normalizedUrl.url;
+  }
+
+  let nextDescription = existing.description;
+  if (input.patch.description !== undefined) {
+    if (input.patch.description === null) {
+      nextDescription = null;
+    } else {
+      const d = input.patch.description.trim();
+      nextDescription = d.length ? d : null;
+    }
+  }
+
+  const nextSortOrder = input.patch.sortOrder ?? existing.sortOrder;
+
+  const updated = await prisma.lessonExternalLink.update({
+    where: { id: input.linkId },
+    data: {
+      title: nextTitle,
+      url: nextUrl,
+      description: nextDescription,
+      sortOrder: nextSortOrder
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      lessonId: true,
+      title: true,
+      url: true,
+      description: true,
+      sortOrder: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return { ok: true, link: mapLessonExternalLink(updated) };
+}
+
+export async function archiveLessonExternalLinkForStaff(input: {
+  tenantId: string;
+  courseId: string;
+  lessonId: string;
+  linkId: string;
+  roles: MembershipRoleName[];
+}): Promise<{ ok: true; archived: true } | { ok: false; error: ServiceError }> {
+  const gate = await assertStaffLessonInCourse({
+    tenantId: input.tenantId,
+    courseId: input.courseId,
+    lessonId: input.lessonId,
+    roles: input.roles
+  });
+  if (!gate.ok) {
+    return gate;
+  }
+
+  const existing = await prisma.lessonExternalLink.findFirst({
+    where: {
+      id: input.linkId,
+      tenantId: input.tenantId,
+      lessonId: input.lessonId,
+      archivedAt: null
+    },
+    select: { id: true }
+  });
+  if (!existing) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "External link not found" } };
+  }
+
+  await prisma.lessonExternalLink.update({
+    where: { id: input.linkId },
     data: { archivedAt: new Date() }
   });
 

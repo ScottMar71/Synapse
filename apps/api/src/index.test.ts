@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { sanitizeReadingHtml } from "@conductor/database";
+import { computeEffectiveWatchedRatio, sanitizeReadingHtml } from "@conductor/database";
 import type { AuthAdapter } from "@conductor/platform";
 import { createNoopPlatformAdapters, mergePlatformAdapters } from "@conductor/platform";
 
@@ -942,6 +942,184 @@ describe("lesson reading endpoints", () => {
   });
 });
 
+describe("lesson watch state endpoints", () => {
+  const watchPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/watch-state`;
+
+  it("computes effective watched ratio from timeline and playedRatio", () => {
+    expect(
+      computeEffectiveWatchedRatio({
+        positionSec: 50,
+        durationSec: 100,
+        playedRatio: 0.2
+      })
+    ).toBe(0.5);
+    expect(
+      computeEffectiveWatchedRatio({
+        positionSec: 10,
+        durationSec: 100,
+        playedRatio: 0.85
+      })
+    ).toBe(0.85);
+    expect(
+      computeEffectiveWatchedRatio({
+        positionSec: 10,
+        durationSec: null,
+        playedRatio: 0.9
+      })
+    ).toBe(0.9);
+  });
+
+  it("returns watch state when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async getLessonWatchStateForViewer() {
+          return {
+            ok: true,
+            watchState: {
+              id: "ws-1",
+              tenantId: tenantA,
+              userId: "user-1",
+              lessonId: "lesson-1",
+              positionSec: 12.5,
+              durationSec: 100,
+              updatedAt: "2026-04-17T12:00:00.000Z"
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(watchPath, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { watchState: { positionSec: number } | null };
+    };
+    expect(body.data.watchState?.positionSec).toBe(12.5);
+  });
+
+  it("returns PATCH payload with completion", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async patchLessonWatchStateForViewer() {
+          return {
+            ok: true,
+            watchState: {
+              id: "ws-1",
+              tenantId: tenantA,
+              userId: "user-1",
+              lessonId: "lesson-1",
+              positionSec: 90,
+              durationSec: 100,
+              updatedAt: "2026-04-17T12:00:00.000Z"
+            },
+            completion: {
+              threshold: 0.8,
+              effectiveWatchedRatio: 0.9,
+              lessonCompleted: true,
+              completionAppliedThisRequest: true,
+              lessonProgress: {
+                id: "p1",
+                tenantId: tenantA,
+                userId: "user-1",
+                courseId: "course-1",
+                moduleId: "mod-1",
+                lessonId: "lesson-1",
+                scope: "LESSON",
+                percent: 100,
+                startedAt: "2026-04-17T12:00:00.000Z",
+                completedAt: "2026-04-17T12:00:00.000Z",
+                createdAt: "2026-04-17T12:00:00.000Z",
+                updatedAt: "2026-04-17T12:00:00.000Z"
+              }
+            }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(watchPath, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ positionSec: 90, durationSec: 100 })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { completion: { completionAppliedThisRequest: boolean } };
+    };
+    expect(body.data.completion.completionAppliedThisRequest).toBe(true);
+  });
+
+  it("denies cross-tenant watch GET without calling data access", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async getLessonWatchStateForViewer() {
+          throw new Error("getLessonWatchStateForViewer should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/watch-state`,
+      { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("denies cross-tenant watch PATCH without calling data access", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async patchLessonWatchStateForViewer() {
+          throw new Error("patchLessonWatchStateForViewer should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/watch-state`,
+      {
+        method: "PATCH",
+        headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+        body: JSON.stringify({ positionSec: 1 })
+      }
+    );
+    expect(response.status).toBe(403);
+  });
+});
+
 describe("lesson glossary endpoints", () => {
   const glossaryPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/glossary`;
 
@@ -1183,6 +1361,253 @@ describe("lesson glossary endpoints", () => {
         method: "PATCH",
         headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
         body: JSON.stringify({ term: "X" })
+      }
+    );
+    expect(response.status).toBe(403);
+  });
+});
+
+describe("lesson external link endpoints", () => {
+  const linksPath = `/api/v1/tenants/${tenantA}/courses/course-1/lessons/lesson-1/links`;
+
+  const sampleLink = {
+    id: "link-1",
+    tenantId: tenantA,
+    lessonId: "lesson-1",
+    title: "Docs",
+    url: "https://example.com/doc",
+    description: "Reference" as string | null,
+    sortOrder: 0,
+    archivedAt: null as string | null,
+    createdAt: "2026-04-17T00:00:00.000Z",
+    updatedAt: "2026-04-17T00:00:00.000Z"
+  };
+
+  it("returns external links when data access succeeds for a learner", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listLessonExternalLinksForViewer() {
+          return { ok: true, links: [sampleLink] };
+        }
+      }
+    });
+
+    const response = await app.request(linksPath, {
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { links: { title: string }[] } };
+    expect(body.data.links).toHaveLength(1);
+    expect(body.data.links[0].title).toBe("Docs");
+  });
+
+  it("rejects javascript: URLs with validation error", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async createLessonExternalLink() {
+          throw new Error("createLessonExternalLink should not run for invalid URL body");
+        }
+      }
+    });
+
+    const response = await app.request(linksPath, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ title: "X", url: "javascript:alert(1)" })
+    });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("VALIDATION_ERROR");
+  });
+
+  it("denies external link POST for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async createLessonExternalLink() {
+          throw new Error("createLessonExternalLink should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(linksPath, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ title: "T", url: "https://example.com" })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff to POST external link when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async createLessonExternalLink() {
+          return { ok: true, link: { ...sampleLink, id: "new-link" } };
+        }
+      }
+    });
+
+    const response = await app.request(linksPath, {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ title: "T", url: "https://example.com/a", sortOrder: 1 })
+    });
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { data: { link: { id: string } } };
+    expect(body.data.link.id).toBe("new-link");
+  });
+
+  it("does not call list external links data access for cross-tenant requests", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async listLessonExternalLinksForViewer() {
+          throw new Error("listLessonExternalLinksForViewer should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/links`,
+      { headers: { authorization: "Bearer valid-token" } }
+    );
+    expect(response.status).toBe(403);
+  });
+
+  const linkItemPath = `${linksPath}/link-1`;
+
+  it("denies external link PATCH for learners", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["LEARNER"];
+        }
+      },
+      dataAccess: {
+        async patchLessonExternalLinkForStaff() {
+          throw new Error("patchLessonExternalLinkForStaff should not run for learners");
+        }
+      }
+    });
+
+    const response = await app.request(linkItemPath, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ title: "X" })
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows staff to PATCH external link when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async patchLessonExternalLinkForStaff() {
+          return {
+            ok: true,
+            link: { ...sampleLink, title: "Updated", url: "https://example.com/updated" }
+          };
+        }
+      }
+    });
+
+    const response = await app.request(linkItemPath, {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+      body: JSON.stringify({ title: "Updated" })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { link: { title: string } } };
+    expect(body.data.link.title).toBe("Updated");
+  });
+
+  it("allows staff to DELETE external link when data access succeeds", async () => {
+    const app = buildApp({
+      adapters: noopAdapters(),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["ADMIN"];
+        }
+      },
+      dataAccess: {
+        async archiveLessonExternalLinkForStaff() {
+          return { ok: true, archived: true as const };
+        }
+      }
+    });
+
+    const response = await app.request(linkItemPath, {
+      method: "DELETE",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { archived: boolean } };
+    expect(body.data.archived).toBe(true);
+  });
+
+  it("does not call external link PATCH data access for cross-tenant requests", async () => {
+    const app = buildApp({
+      adapters: adaptersWithAuth({
+        async validateToken() {
+          return { userId: "user-1", tenantId: tenantA };
+        }
+      }),
+      membershipStore: {
+        async getRolesForUser() {
+          return ["INSTRUCTOR"];
+        }
+      },
+      dataAccess: {
+        async patchLessonExternalLinkForStaff() {
+          throw new Error("patchLessonExternalLinkForStaff should not run for cross-tenant path");
+        }
+      }
+    });
+
+    const response = await app.request(
+      `/api/v1/tenants/${tenantB}/courses/course-1/lessons/lesson-1/links/link-1`,
+      {
+        method: "PATCH",
+        headers: { authorization: "Bearer valid-token", "content-type": "application/json" },
+        body: JSON.stringify({ title: "X" })
       }
     );
     expect(response.status).toBe(403);

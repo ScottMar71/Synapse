@@ -18,9 +18,15 @@ import {
   lessonFileReorderBodySchema,
   lessonFileUploadInitBodySchema,
   lessonFileUploadInstructionSchema,
+  lessonExternalLinkCreateBodySchema,
+  lessonExternalLinkDtoSchema,
+  lessonExternalLinkPatchBodySchema,
   lessonGlossaryCreateBodySchema,
   lessonGlossaryEntryDtoSchema,
   lessonGlossaryPatchBodySchema,
+  lessonWatchCompletionResultSchema,
+  lessonWatchStateDtoSchema,
+  lessonWatchStatePatchBodySchema,
   lessonReadingDtoSchema,
   lessonReadingPatchBodySchema,
   lmsApiTags,
@@ -36,15 +42,18 @@ import {
 } from "@conductor/contracts";
 import {
   archiveCourseCategory,
+  archiveLessonExternalLinkForStaff,
   archiveLessonFileAttachmentForStaff,
   archiveLessonGlossaryEntryForStaff,
   createCourseCategory,
   createEnrollment,
+  createLessonExternalLink,
   getCourseForViewer,
   createLessonGlossaryEntry,
   getActiveMembershipRoles,
   getLessonFileDownloadForViewer,
   getLessonReadingForViewer,
+  getLessonWatchStateForViewer,
   initLessonFileUploadForStaff,
   listCourseCategoriesForTenant,
   listCoursesForTenant,
@@ -53,14 +62,17 @@ import {
   listLearnersForTenant,
   listCourseLessonOutlineForStaff,
   listCourseLessonOutlineForViewer,
+  listLessonExternalLinksForViewer,
   listLessonFileAttachmentsForViewer,
   listLessonGlossaryEntriesForViewer,
   MAX_LESSON_FILE_BYTES,
+  patchLessonExternalLinkForStaff,
   patchLessonFileAttachmentForStaff,
   patchLessonGlossaryEntryForStaff,
   listProgressForUser,
   listPublishedCoursesForTenant,
   patchLessonReadingForStaff,
+  patchLessonWatchStateForViewer,
   provisionLearnerForTenant,
   removeCourseFromCategory,
   reorderLessonFileAttachmentsForStaff,
@@ -165,10 +177,16 @@ type DataAccess = {
   listCourseLessonOutlineForViewer: typeof listCourseLessonOutlineForViewer;
   getLessonReadingForViewer: typeof getLessonReadingForViewer;
   patchLessonReadingForStaff: typeof patchLessonReadingForStaff;
+  getLessonWatchStateForViewer: typeof getLessonWatchStateForViewer;
+  patchLessonWatchStateForViewer: typeof patchLessonWatchStateForViewer;
   listLessonGlossaryEntriesForViewer: typeof listLessonGlossaryEntriesForViewer;
   createLessonGlossaryEntry: typeof createLessonGlossaryEntry;
   patchLessonGlossaryEntryForStaff: typeof patchLessonGlossaryEntryForStaff;
   archiveLessonGlossaryEntryForStaff: typeof archiveLessonGlossaryEntryForStaff;
+  listLessonExternalLinksForViewer: typeof listLessonExternalLinksForViewer;
+  createLessonExternalLink: typeof createLessonExternalLink;
+  patchLessonExternalLinkForStaff: typeof patchLessonExternalLinkForStaff;
+  archiveLessonExternalLinkForStaff: typeof archiveLessonExternalLinkForStaff;
   initLessonFileUploadForStaff: typeof initLessonFileUploadForStaff;
   listLessonFileAttachmentsForViewer: typeof listLessonFileAttachmentsForViewer;
   getLessonFileDownloadForViewer: typeof getLessonFileDownloadForViewer;
@@ -240,10 +258,16 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     listCourseLessonOutlineForViewer,
     getLessonReadingForViewer,
     patchLessonReadingForStaff,
+    getLessonWatchStateForViewer,
+    patchLessonWatchStateForViewer,
     listLessonGlossaryEntriesForViewer,
     createLessonGlossaryEntry,
     patchLessonGlossaryEntryForStaff,
     archiveLessonGlossaryEntryForStaff,
+    listLessonExternalLinksForViewer,
+    createLessonExternalLink,
+    patchLessonExternalLinkForStaff,
+    archiveLessonExternalLinkForStaff,
     initLessonFileUploadForStaff,
     listLessonFileAttachmentsForViewer,
     getLessonFileDownloadForViewer,
@@ -343,6 +367,10 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
 
   const tenantCourseLessonGlossaryEntryParams = tenantCourseLessonParams.extend({
     entryId: z.string().min(1).openapi({ param: { name: "entryId", in: "path" } })
+  });
+
+  const tenantCourseLessonExternalLinkParams = tenantCourseLessonParams.extend({
+    linkId: z.string().min(1).openapi({ param: { name: "linkId", in: "path" } })
   });
 
   const tenantCourseLessonFileParams = tenantCourseLessonParams.extend({
@@ -650,6 +678,127 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
     return c.json({ data: { reading: result.reading } }, 200);
   });
 
+  const getLessonWatchStateRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/watch-state`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description:
+          "Video lesson watch position for the current user. Null until the first PATCH. Updates use last-write-wins (see PATCH). Staff may preview without enrollment; learners must be enrolled.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ watchState: lessonWatchStateDtoSchema.nullable() }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(getLessonWatchStateRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.getLessonWatchStateForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_WATCH_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId }
+    });
+    return c.json({ data: { watchState: result.watchState } }, 200);
+  });
+
+  const patchLessonWatchStateRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/watch-state`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonWatchStatePatchBodySchema } } }
+    },
+    responses: {
+      200: {
+        description:
+          "Upserts watch state with last-write-wins semantics (no optimistic version). When the effective watched ratio reaches the server threshold (default 0.8), lesson progress is set to 100% for enrolled learners (idempotent). Ratio uses max(position/duration when duration is known, optional client playedRatio).",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(
+              z.object({
+                watchState: lessonWatchStateDtoSchema,
+                completion: lessonWatchCompletionResultSchema
+              })
+            )
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(patchLessonWatchStateRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.patchLessonWatchStateForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles,
+      patch: body
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_WATCH_PATCH,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: {
+        courseId,
+        lessonId,
+        effectiveWatchedRatio: result.completion.effectiveWatchedRatio
+      }
+    });
+    if (result.completion.completionAppliedThisRequest) {
+      emitAuditEvent({
+        action: AUDIT_ACTIONS.PROGRESS_WRITE,
+        actorUserId: auth.session.userId,
+        tenantId,
+        resource: {
+          subjectUserId: auth.session.userId,
+          courseId,
+          lessonId,
+          moduleId: result.completion.lessonProgress?.moduleId ?? null,
+          scope: "LESSON"
+        }
+      });
+    }
+    return c.json(
+      { data: { watchState: result.watchState, completion: result.completion } },
+      200
+    );
+  });
+
   const listLessonGlossaryRoute = createRoute({
     method: "get",
     path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/glossary`,
@@ -842,6 +991,205 @@ export function buildApp(dependencies: AppDependencies = {}): OpenAPIHono {
       actorUserId: auth.session.userId,
       tenantId,
       resource: { courseId, lessonId, entryId }
+    });
+    return c.json({ data: { archived: true as const } }, 200);
+  });
+
+  const listLessonExternalLinksRoute = createRoute({
+    method: "get",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/links`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonParams },
+    responses: {
+      200: {
+        description:
+          "External lesson links (tenant-scoped; staff author; enrolled learners). Unsafe URL schemes rejected on write.",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ links: z.array(lessonExternalLinkDtoSchema) }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(listLessonExternalLinksRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const auth = await authorizeRequest(c, tenantId);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.listLessonExternalLinksForViewer({
+      tenantId,
+      courseId,
+      lessonId,
+      viewerUserId: auth.session.userId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_EXTERNAL_LINK_LIST_READ,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, resultCount: result.links.length }
+    });
+    return c.json({ data: { links: result.links } }, 200);
+  });
+
+  const createLessonExternalLinkRoute = createRoute({
+    method: "post",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/links`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonParams,
+      body: { content: { "application/json": { schema: lessonExternalLinkCreateBodySchema } } }
+    },
+    responses: {
+      201: {
+        description: "Created external link",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ link: lessonExternalLinkDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(createLessonExternalLinkRoute, async (c) => {
+    const { tenantId, courseId, lessonId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.createLessonExternalLink({
+      tenantId,
+      courseId,
+      lessonId,
+      roles: auth.roles,
+      body: {
+        title: body.title,
+        url: body.url,
+        description: body.description,
+        sortOrder: body.sortOrder
+      }
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_EXTERNAL_LINK_CREATE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, linkId: result.link.id }
+    });
+    return c.json({ data: { link: result.link } }, 201);
+  });
+
+  const patchLessonExternalLinkRoute = createRoute({
+    method: "patch",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/links/{linkId}`,
+    tags: [lmsApiTags.lessons],
+    request: {
+      params: tenantCourseLessonExternalLinkParams,
+      body: { content: { "application/json": { schema: lessonExternalLinkPatchBodySchema } } }
+    },
+    responses: {
+      200: {
+        description: "Updated external link",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ link: lessonExternalLinkDtoSchema }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(patchLessonExternalLinkRoute, async (c) => {
+    const { tenantId, courseId, lessonId, linkId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.patchLessonExternalLinkForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      linkId,
+      roles: auth.roles,
+      patch: {
+        title: body.title,
+        url: body.url,
+        description: body.description,
+        sortOrder: body.sortOrder
+      }
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_EXTERNAL_LINK_PATCH,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, linkId }
+    });
+    return c.json({ data: { link: result.link } }, 200);
+  });
+
+  const deleteLessonExternalLinkRoute = createRoute({
+    method: "delete",
+    path: `${base}/tenants/{tenantId}/courses/{courseId}/lessons/{lessonId}/links/{linkId}`,
+    tags: [lmsApiTags.lessons],
+    request: { params: tenantCourseLessonExternalLinkParams },
+    responses: {
+      200: {
+        description: "External link archived (hidden from learner lists)",
+        content: {
+          "application/json": {
+            schema: dataEnvelope(z.object({ archived: z.literal(true) }))
+          }
+        }
+      },
+      ...lessonReadingErrorResponses
+    }
+  });
+
+  app.openapi(deleteLessonExternalLinkRoute, async (c) => {
+    const { tenantId, courseId, lessonId, linkId } = c.req.valid("param");
+    const staffRoles: MembershipRole[] = ["INSTRUCTOR", "ADMIN"];
+    const auth = await authorizeRequest(c, tenantId, staffRoles);
+    if (!auth.ok) {
+      return auth.response as never;
+    }
+    const result = await resolvedDependencies.dataAccess.archiveLessonExternalLinkForStaff({
+      tenantId,
+      courseId,
+      lessonId,
+      linkId,
+      roles: auth.roles
+    });
+    if (!result.ok) {
+      const mapped = mapServiceError(result.error);
+      return c.json({ error: mapped.message }, mapped.status) as never;
+    }
+    emitAuditEvent({
+      action: AUDIT_ACTIONS.LESSON_EXTERNAL_LINK_ARCHIVE,
+      actorUserId: auth.session.userId,
+      tenantId,
+      resource: { courseId, lessonId, linkId }
     });
     return c.json({ data: { archived: true as const } }, 200);
   });
