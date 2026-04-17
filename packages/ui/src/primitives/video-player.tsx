@@ -1,9 +1,10 @@
 "use client";
 
-import type { SyntheticEvent, VideoHTMLAttributes } from "react";
+import type { ReactNode, SyntheticEvent, VideoHTMLAttributes } from "react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import { cx } from "../internal/cx";
+import { Spinner } from "./spinner";
 import styles from "./video-player.module.css";
 
 /** Playback position; not the native media `progress` (buffering) event. */
@@ -24,6 +25,16 @@ export type VideoPlayTracking = {
   completed: boolean;
 };
 
+/**
+ * Caption track aligned with `lessonVideoCaptionTrackSchema` in `@conductor/contracts` (props-only; no I/O).
+ */
+export type VideoCaptionTrack = {
+  src: string;
+  label: string;
+  srclang: string;
+  isDefault?: boolean;
+};
+
 export type VideoPlayerProps = Omit<VideoHTMLAttributes<HTMLVideoElement>, "onProgress"> & {
   /**
    * Fires during playback with throttled time updates (see `progressThrottleMs`).
@@ -35,6 +46,19 @@ export type VideoPlayerProps = Omit<VideoHTMLAttributes<HTMLVideoElement>, "onPr
   /** Minimum interval between `onProgress` calls while playing, in ms. Default 250. */
   progressThrottleMs?: number;
   wrapClassName?: string;
+  /** WebVTT (or other) tracks rendered as `<track kind="subtitles" />` children. */
+  captions?: VideoCaptionTrack[];
+  /**
+   * When `playedRatio` reaches this value (0–1), `onWatchedThresholdReached` fires once per `src` until the source changes.
+   * Default 0.8 (80%).
+   */
+  watchedThreshold?: number;
+  /** Fires once per `src` when the viewer reaches `watchedThreshold` of the duration. */
+  onWatchedThresholdReached?: () => void;
+  /** Optional copy for the inline error overlay (defaults to a generic unavailable message). */
+  unavailableMessage?: string;
+  /** Replace the default error overlay (still sets `role="alert"` on the wrapper when default is used). */
+  renderError?: (ctx: { onRetry: () => void }) => ReactNode;
 };
 
 function clamp01(n: number): number {
@@ -62,13 +86,26 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     onSeeking,
     onSeeked,
     onTimeUpdate,
+    onWaiting,
+    onPlaying,
+    onCanPlay,
+    onError,
+    captions,
+    watchedThreshold: watchedThresholdProp = 0.8,
+    onWatchedThresholdReached,
+    unavailableMessage = "Video unavailable. Try again later.",
+    renderError,
     ...rest
   },
   ref,
 ) {
+  const watchedThreshold = clamp01(watchedThresholdProp);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastProgressEmitRef = useRef(0);
   const lastWatchTickRef = useRef<number | null>(null);
+  const watchedThresholdFiredRef = useRef(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [tracking, setTracking] = useState<VideoPlayTracking>({
     playCount: 0,
     hasStarted: false,
@@ -155,6 +192,15 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
   const emitProgress = useCallback(
     (video: HTMLVideoElement, force = false) => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      const currentTime = video.currentTime;
+      const playedRatio = duration > 0 ? clamp01(currentTime / duration) : 0;
+
+      if (onWatchedThresholdReached && !watchedThresholdFiredRef.current && playedRatio >= watchedThreshold) {
+        watchedThresholdFiredRef.current = true;
+        onWatchedThresholdReached();
+      }
+
       if (!onProgress) {
         return;
       }
@@ -163,12 +209,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         return;
       }
       lastProgressEmitRef.current = now;
-      const duration = Number.isFinite(video.duration) ? video.duration : 0;
-      const currentTime = video.currentTime;
-      const playedRatio = duration > 0 ? clamp01(currentTime / duration) : 0;
       onProgress({ currentTime, duration, playedRatio });
     },
-    [onProgress, progressThrottleMs],
+    [onProgress, progressThrottleMs, onWatchedThresholdReached, watchedThreshold],
   );
 
   useImperativeHandle(
@@ -182,7 +225,15 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
   useEffect(() => {
     lastWatchTickRef.current = null;
+    watchedThresholdFiredRef.current = false;
+    setLoadFailed(false);
   }, [rest.src]);
+
+  const handleRetry = useCallback(() => {
+    setLoadFailed(false);
+    const el = videoRef.current;
+    el?.load();
+  }, []);
 
   const handlePlay = useCallback(
     (e: SyntheticEvent<HTMLVideoElement>) => {
@@ -262,6 +313,52 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     [emitProgress, emitTracking, onTimeUpdate],
   );
 
+  const handleWaiting = useCallback(
+    (e: SyntheticEvent<HTMLVideoElement>) => {
+      setIsBuffering(true);
+      onWaiting?.(e);
+    },
+    [onWaiting],
+  );
+
+  const handlePlaying = useCallback(
+    (e: SyntheticEvent<HTMLVideoElement>) => {
+      setIsBuffering(false);
+      onPlaying?.(e);
+    },
+    [onPlaying],
+  );
+
+  const handleCanPlay = useCallback(
+    (e: SyntheticEvent<HTMLVideoElement>) => {
+      setIsBuffering(false);
+      onCanPlay?.(e);
+    },
+    [onCanPlay],
+  );
+
+  const handleError = useCallback(
+    (e: SyntheticEvent<HTMLVideoElement>) => {
+      setLoadFailed(true);
+      setIsBuffering(false);
+      onError?.(e);
+    },
+    [onError],
+  );
+
+  const errorOverlay =
+    loadFailed &&
+    (renderError ? (
+      renderError({ onRetry: handleRetry })
+    ) : (
+      <div className={styles.errorOverlay} role="alert">
+        <p className={styles.errorText}>{unavailableMessage}</p>
+        <button type="button" className={styles.retryButton} onClick={handleRetry}>
+          Retry
+        </button>
+      </div>
+    ));
+
   return (
     <div className={cx(styles.wrap, wrapClassName)}>
       <video
@@ -274,7 +371,28 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         onSeeking={handleSeeking}
         onSeeked={handleSeeked}
         onTimeUpdate={handleTimeUpdate}
-      />
+        onWaiting={handleWaiting}
+        onPlaying={handlePlaying}
+        onCanPlay={handleCanPlay}
+        onError={handleError}
+      >
+        {captions?.map((c, i) => (
+          <track
+            key={`${c.srclang}-${c.src}-${i}`}
+            kind="subtitles"
+            src={c.src}
+            label={c.label}
+            srcLang={c.srclang}
+            default={c.isDefault}
+          />
+        ))}
+      </video>
+      {isBuffering && !loadFailed ? (
+        <div className={styles.bufferingOverlay} aria-hidden="true">
+          <Spinner label="Buffering video" size="sm" />
+        </div>
+      ) : null}
+      {errorOverlay}
     </div>
   );
 });
